@@ -76,6 +76,7 @@ def sanitize_direct_typst_inline_math(text: str) -> str:
         expr = match.group(0)[1:-1].strip()
         if not expr:
             return match.group(0)
+        expr = re.sub(r"\\{2,}(?=[A-Za-z])", r"\\", expr)
         expr = re.sub(r"\\angle(?=[A-Za-z])", r"\\angle ", expr)
         expr = re.sub(r"\\mathscr\b", r"\\mathcal", expr)
         return f"${expr}$"

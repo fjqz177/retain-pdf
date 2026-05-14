@@ -214,6 +214,10 @@ def classify_exception(exc: BaseException, *, default_stage: str, provider: str 
     elif any(token in lowered for token in ("readtimeout", "connecttimeout", "timed out")):
         error_type = "upstream_timeout"
         summary = "外部服务请求超时"
+    elif stage == "render" and any(token in lowered for token in ("filenotfounderror", "no such file or directory")):
+        error_type = "render_failed"
+        summary = "排版或编译阶段失败"
+        retryable = True
     elif http_status_code == 429 or any(token in lowered for token in ("rate limited", "rate limit", "too many requests", "retry-after")):
         error_type = "upstream_rate_limited"
         summary = "外部服务请求被限流"

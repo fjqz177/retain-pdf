@@ -31,7 +31,7 @@ def render_translated_pages_map(
     )
     doc = fitz.open(render_source_pdf.path)
     try:
-        render_pages_map = prepare_render_payloads_by_page(translated_pages_map)
+        render_pages_map = prepare_render_payloads_by_page(translated_pages_map, source_pdf_path=render_source_pdf.path)
         for page_idx in sorted(render_pages_map):
             if 0 <= page_idx < len(doc):
                 page = doc[page_idx]

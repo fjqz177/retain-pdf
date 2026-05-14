@@ -25,7 +25,11 @@ struct PipelineEventJsonlRecord {
     #[serde(default)]
     level: Option<String>,
     #[serde(default)]
+    user_stage: Option<String>,
+    #[serde(default)]
     stage: Option<String>,
+    #[serde(default)]
+    substage: Option<String>,
     #[serde(default)]
     stage_detail: Option<String>,
     #[serde(default)]
@@ -42,6 +46,8 @@ struct PipelineEventJsonlRecord {
     progress_current: Option<i64>,
     #[serde(default)]
     progress_total: Option<i64>,
+    #[serde(default)]
+    progress_unit: Option<String>,
     #[serde(default)]
     retry_count: Option<u32>,
     #[serde(default)]
@@ -117,6 +123,9 @@ fn load_pipeline_events_jsonl(job_id: &str, path: &Path, base_seq: i64) -> Vec<J
                 seq: base_seq + index as i64 + 1,
                 ts: parsed.ts.unwrap_or_default(),
                 level: parsed.level.unwrap_or_else(|| "info".to_string()),
+                user_stage: parsed.user_stage.or_else(|| user_stage_for_event(parsed.stage.as_deref())),
+                substage: parsed.substage.clone().or_else(|| parsed.provider_stage.clone()),
+                progress_unit: parsed.progress_unit.or_else(|| progress_unit_for_event(parsed.stage.as_deref(), &event)),
                 stage: parsed.stage,
                 stage_detail: parsed.stage_detail,
                 provider: parsed.provider,
@@ -132,6 +141,28 @@ fn load_pipeline_events_jsonl(job_id: &str, path: &Path, base_seq: i64) -> Vec<J
             })
         })
         .collect()
+}
+
+fn user_stage_for_event(stage: Option<&str>) -> Option<String> {
+    match stage.map(str::trim).unwrap_or_default() {
+        "ocr_upload" | "ocr_processing" | "ocr_result_ready" | "normalizing" => Some("ocr".to_string()),
+        "translation_prepare" | "translating" | "translation_batches" | "continuation_review" | "page_policies"
+        | "domain_inference" | "garbled_repair" => Some("translate".to_string()),
+        "render_prepare" | "rendering" | "compile" | "overlay" | "saving" => Some("render".to_string()),
+        "finished" | "done" => Some("done".to_string()),
+        _ => None,
+    }
+}
+
+fn progress_unit_for_event(stage: Option<&str>, event: &str) -> Option<String> {
+    let unit = match stage.map(str::trim).unwrap_or_default() {
+        "translating" | "translation_batches" => "batch",
+        "ocr_processing" | "continuation_review" | "page_policies" | "domain_inference" | "garbled_repair" | "rendering" => "page",
+        "compile" | "overlay" | "saving" | "render_prepare" | "translation_prepare" | "normalizing" => "step",
+        _ if event == "stage_progress" => "step",
+        _ => "none",
+    };
+    Some(unit.to_string())
 }
 
 fn select_live_stage_snapshot(items: &[JobEventRecord]) -> Option<LiveStageSnapshot> {

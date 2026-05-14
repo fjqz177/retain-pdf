@@ -1,7 +1,6 @@
 import re
 
-from services.translation.item_reader import item_block_kind
-from services.translation.item_reader import item_is_caption_like
+from services.translation.item_reader import item_is_bodylike
 
 
 TERMINAL_PUNCTUATION = (".", "!", "?", ":", ";")
@@ -158,8 +157,7 @@ def same_page(a: dict, b: dict) -> bool:
 
 def eligible(item: dict) -> bool:
     return (
-        item_block_kind(item) == "text"
-        and not item_is_caption_like(item)
+        item_is_bodylike(item)
         and has_balanced_inline_math_delimiters(item.get("protected_source_text", ""))
         and bool(normalize_text(item.get("protected_source_text", "")))
     )

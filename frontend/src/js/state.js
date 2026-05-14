@@ -16,6 +16,7 @@ export function createJobState() {
     currentJobEventsJobId: "",
     currentJobEventsFetchedAt: 0,
     currentJobDisplayedStageKey: "",
+    currentJobDisplayedStageJobId: "",
     currentJobStartedAt: "",
     currentJobFinishedAt: "",
   };
@@ -88,6 +89,7 @@ export function resetJobSecondaryState(target = state) {
     currentJobEventsJobId: "",
     currentJobEventsFetchedAt: 0,
     currentJobDisplayedStageKey: "",
+    currentJobDisplayedStageJobId: "",
   });
 }
 

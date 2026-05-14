@@ -66,7 +66,7 @@ export function buildApiUrl(apiPrefix = "", relativePath = "") {
 
 export function mockScenario() {
   const value = new URLSearchParams(window.location.search).get("mock")?.trim().toLowerCase() || "";
-  return ["queued", "running", "succeeded", "failed"].includes(value) ? value : "";
+  return ["queued", "running", "succeeded", "failed", "upload", "ocr", "translate", "render", "done"].includes(value) ? value : "";
 }
 
 export function isMockMode() {

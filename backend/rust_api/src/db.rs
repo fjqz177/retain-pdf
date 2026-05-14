@@ -624,6 +624,9 @@ impl Db {
         )?;
         let ts = now_iso();
         let payload_json = payload.as_ref().map(serde_json::to_string).transpose()?;
+        let user_stage = user_stage_for_event(stage.as_deref());
+        let substage = provider_stage.clone();
+        let progress_unit = progress_unit_for_event(stage.as_deref(), event);
         tx.execute(
             r#"
             INSERT INTO events (
@@ -658,7 +661,9 @@ impl Db {
             seq: next_seq,
             ts,
             level: level.to_string(),
+            user_stage,
             stage,
+            substage,
             stage_detail,
             provider,
             provider_stage,
@@ -667,6 +672,7 @@ impl Db {
             message: message.to_string(),
             progress_current,
             progress_total,
+            progress_unit,
             retry_count,
             elapsed_ms,
             payload,
@@ -740,6 +746,28 @@ impl Db {
         conn.query_row("SELECT 1", [], |_| Ok(()))?;
         Ok(())
     }
+}
+
+fn user_stage_for_event(stage: Option<&str>) -> Option<String> {
+    match stage.map(str::trim).unwrap_or_default() {
+        "ocr_upload" | "ocr_processing" | "ocr_result_ready" | "normalizing" => Some("ocr".to_string()),
+        "translation_prepare" | "translating" | "translation_batches" | "continuation_review" | "page_policies"
+        | "domain_inference" | "garbled_repair" => Some("translate".to_string()),
+        "render_prepare" | "rendering" | "compile" | "overlay" | "saving" => Some("render".to_string()),
+        "finished" | "done" => Some("done".to_string()),
+        _ => None,
+    }
+}
+
+fn progress_unit_for_event(stage: Option<&str>, event: &str) -> Option<String> {
+    let unit = match stage.map(str::trim).unwrap_or_default() {
+        "translating" | "translation_batches" => "batch",
+        "ocr_processing" | "continuation_review" | "page_policies" | "domain_inference" | "garbled_repair" | "rendering" => "page",
+        "compile" | "overlay" | "saving" | "render_prepare" | "translation_prepare" | "normalizing" => "step",
+        _ if event == "stage_progress" => "step",
+        _ => "none",
+    };
+    Some(unit.to_string())
 }
 
 #[cfg(test)]

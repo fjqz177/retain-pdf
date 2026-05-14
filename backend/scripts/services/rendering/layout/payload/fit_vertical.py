@@ -30,10 +30,13 @@ def fit_block_to_vertical_limit(
     layout_density = layout_density_ratio(inner, protected_text, font_size_pt=font_size_pt, line_step_pt=line_step)
     is_dense_block = length_density_ratio >= COMPACT_TRIGGER_RATIO or layout_density >= LAYOUT_COMPACT_TRIGGER_RATIO
     is_body = bool(item.get("_is_body_text_candidate", False))
+    inherited_font_floor = float(item.get("_short_body_inherited_font_floor_pt") or 0.0)
     min_font = 8.45 if is_dense_block else 8.75
     if is_body and page_body_font_size_pt is not None:
         min_font = min(min_font, page_body_font_size_pt - 0.5)
     min_font = max(7.4 if is_body else 8.0, min_font)
+    if inherited_font_floor > 0:
+        min_font = max(min_font, min(font_size_pt, inherited_font_floor))
 
     best_font = font_size_pt
     best_leading = leading_em
@@ -66,6 +69,8 @@ def fit_block_to_vertical_limit(
             dense_min_font = max(6.2, min(dense_min_font, page_body_font_size_pt - (2.6 if severe_overflow else 1.6)))
         else:
             dense_min_font = max(6.4, dense_min_font - (1.8 if severe_overflow else 1.0))
+        if inherited_font_floor > 0:
+            dense_min_font = max(dense_min_font, min(font_size_pt, inherited_font_floor))
         for _ in range(18):
             if estimated_height <= max_height_pt * 1.01:
                 break

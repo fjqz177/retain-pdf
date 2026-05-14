@@ -2,6 +2,7 @@ import { API_PREFIX } from "./constants.js";
 import { mountRecentJobsFeature } from "./features/recent-jobs/controller.js";
 import {
   ensureReaderDialogFeature,
+  getRequestedJobIdFromLocation,
   getRequestedReaderJobIdFromLocation,
 } from "./main-helpers.js";
 
@@ -25,10 +26,13 @@ export function bootstrapStartupRoute({
   setText,
 }) {
   const startupReaderJobId = getRequestedReaderJobIdFromLocation();
+  const startupJobId = startupReaderJobId || getRequestedJobIdFromLocation();
+  if (startupJobId) {
+    jobRuntimeFeature?.startPolling(startupJobId);
+  }
   if (!startupReaderJobId) {
     return;
   }
-  jobRuntimeFeature?.startPolling(startupReaderJobId);
   window.setTimeout(async () => {
     try {
       const feature = await ensureReaderDialogFeature({

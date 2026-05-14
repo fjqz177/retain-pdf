@@ -8,6 +8,9 @@ from services.rendering.layout.inline_content.fallback.latex_normalizer import n
 
 
 BARE_LATEX_COMMAND_RE = re.compile(r"(?P<expr>\\[A-Za-z]+(?:\s*\{[^{}]+\})+)")
+LATEX_CITATION_COMMAND_RE = re.compile(
+    r"\\(?:cite|citep|citet|autocite|parencite|textcite)\s*\{\s*(?P<body>[^{}]+?)\s*\}"
+)
 BARE_SUPERSCRIPT_CITATION_RE = re.compile(r"(?P<expr>\^\{\s*\d+[A-Za-z]?(?:\s*[-,]\s*\d+[A-Za-z]?)*\s*\})")
 BRACKET_CITATION_RE = re.compile(r"^\[\s*(?P<body>\d+[A-Za-z]?(?:\s*[-,]\s*\d+[A-Za-z]?)*?)\s*\]$")
 SUPERSCRIPT_CITATION_RE = re.compile(r"^\^\{\s*(?P<body>\d+[A-Za-z]?(?:\s*[-,]\s*\d+[A-Za-z]?)*?)\s*\}$")
@@ -98,6 +101,16 @@ def normalize_plain_citation(formula_text: str) -> str:
     return formula_text.strip()
 
 
+def normalize_latex_citation_commands(text: str) -> str:
+    def _replace(match: re.Match[str]) -> str:
+        body = _compact_citation_body(match.group("body"))
+        if not body:
+            return match.group(0)
+        return body.translate(SUPERSCRIPT_CHAR_MAP)
+
+    return LATEX_CITATION_COMMAND_RE.sub(_replace, text or "")
+
+
 def _normalize_math_candidate(expr: str) -> str:
     return normalize_formula_for_latex_math(expr.strip())
 
@@ -141,6 +154,7 @@ def promote_inline_math_like_text(text: str) -> str:
         return ""
 
     promoted = apply_to_non_math_segments(text, _normalize_plain_segment_for_math)
+    promoted = apply_to_non_math_segments(promoted, normalize_latex_citation_commands)
     promoted = apply_to_non_math_segments(promoted, lambda plain: BARE_SUPERSCRIPT_CITATION_RE.sub(_wrap_raw_math_candidate, plain))
     promoted = apply_to_non_math_segments(promoted, lambda plain: LEFT_RIGHT_LATEX_RE.sub(_wrap_math_candidate, plain))
     promoted = apply_to_non_math_segments(promoted, lambda plain: BARE_LATEX_COMMAND_RE.sub(_wrap_math_candidate, plain))
@@ -166,7 +180,9 @@ def build_markdown_from_direct_text(
     else:
         markdown = apply_to_non_math_segments(
             markdown,
-            lambda plain: escape_markdown_literal_asterisks(_normalize_plain_segment_for_math(plain)),
+            lambda plain: escape_markdown_literal_asterisks(
+                normalize_latex_citation_commands(_normalize_plain_segment_for_math(plain))
+            ),
         )
     if normalize_existing_inline_math:
         markdown = _sanitize_existing_inline_math_for_markdown(markdown)
@@ -193,7 +209,8 @@ def build_markdown_paragraph(item: dict) -> str:
 
 
 def build_direct_typst_passthrough_text(text: str) -> str:
-    return build_direct_typst_passthrough_markdown(text)
+    markdown = apply_to_non_math_segments(text or "", normalize_latex_citation_commands)
+    return build_direct_typst_passthrough_markdown(markdown)
 
 
 def build_plain_text(item: dict) -> str:

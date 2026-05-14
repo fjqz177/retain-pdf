@@ -3,6 +3,7 @@ from __future__ import annotations
 from foundation.config import fonts
 from foundation.config import layout
 from services.rendering.layout.font_roles import is_caption_like_block
+from services.rendering.layout.font_roles import is_footnote_like_block
 from services.rendering.layout.font_roles import is_local_textual_item
 from services.rendering.layout.typography.measurement import clamp
 from services.rendering.layout.typography.measurement import local_font_metric
@@ -19,6 +20,9 @@ LOCAL_BLOCK_SCALE_MIN = 0.97
 LOCAL_BLOCK_SCALE_MAX = 1.03
 CAPTION_FONT_SCALE = 0.86
 CAPTION_MAX_FONT_SIZE_PT = 9.8
+FOOTNOTE_FONT_SCALE = 0.78
+FOOTNOTE_MAX_FONT_SIZE_PT = 8.8
+FOOTNOTE_MIN_FONT_SIZE_PT = 6.6
 BODY_PAGE_BLEND_BASE = 0.86
 BODY_PAGE_BLEND_MIN = 0.74
 BODY_COMPACT_FONT_SCALE_MAX = 0.04
@@ -33,6 +37,8 @@ def local_font_size_pt(item: dict) -> float:
     if metric <= 0:
         return fonts.DEFAULT_FONT_SIZE
     base_size = metric * layout.BODY_FONT_SIZE_FACTOR
+    if is_footnote_like_block(item):
+        return round(clamp(base_size * FOOTNOTE_FONT_SCALE, FOOTNOTE_MIN_FONT_SIZE_PT, FOOTNOTE_MAX_FONT_SIZE_PT), 2)
     if is_caption_like_block(item):
         return round(clamp(base_size * CAPTION_FONT_SCALE, MIN_FONT_SIZE_PT, CAPTION_MAX_FONT_SIZE_PT), 2)
     return round(clamp(base_size, MIN_FONT_SIZE_PT, MAX_LOCAL_FONT_SIZE_PT), 2)
@@ -82,6 +88,9 @@ __all__ = [
     "BODY_PAGE_BLEND_MIN",
     "CAPTION_FONT_SCALE",
     "CAPTION_MAX_FONT_SIZE_PT",
+    "FOOTNOTE_FONT_SCALE",
+    "FOOTNOTE_MAX_FONT_SIZE_PT",
+    "FOOTNOTE_MIN_FONT_SIZE_PT",
     "LOCAL_BLOCK_SCALE_MAX",
     "LOCAL_BLOCK_SCALE_MIN",
     "MAX_FONT_SIZE_PT",

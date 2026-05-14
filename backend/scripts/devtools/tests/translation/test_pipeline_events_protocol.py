@@ -60,6 +60,8 @@ def test_pipeline_event_writer_emits_structured_jsonl(tmp_path: Path) -> None:
         "artifact_published",
     ]
     assert rows[0]["provider"] == "paddle"
+    assert rows[1]["user_stage"] == "translate"
+    assert rows[1]["progress_unit"] == "batch"
     assert rows[1]["progress_current"] == 3
     assert rows[1]["progress_total"] == 5
     assert rows[1]["elapsed_ms"] == 1234

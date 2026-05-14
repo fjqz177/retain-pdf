@@ -177,6 +177,9 @@ class TranslateStageParams:
     model: str
     base_url: str
     credential_ref: str
+    render_prewarm_output_pdf_path: Path | None
+    render_prewarm_mode: str
+    render_prewarm_pdf_compress_dpi: int
 
 
 @dataclass(frozen=True)
@@ -241,6 +244,9 @@ class TranslateStageSpec:
             model=str(params_payload.get("model", "") or ""),
             base_url=str(params_payload.get("base_url", "") or ""),
             credential_ref=str(params_payload.get("credential_ref", "") or ""),
+            render_prewarm_output_pdf_path=_optional_path(params_payload.get("render_prewarm_output_pdf_path")),
+            render_prewarm_mode=str(params_payload.get("render_prewarm_mode", "auto") or "auto"),
+            render_prewarm_pdf_compress_dpi=int(params_payload.get("render_prewarm_pdf_compress_dpi", 0) or 0),
         )
         return cls(
             schema_version=schema_version,

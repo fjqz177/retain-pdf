@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
-import { resolveDisplayedStagePresentation } from "../src/js/job-stage-presentation.js";
+import {
+  collectStageProgressByKey,
+  resolveDisplayedStagePresentation,
+} from "../src/js/job-stage-presentation.js";
+import { resolveVisualStageKeyForSnapshot } from "../src/js/components/status/job-status-card-visuals.js";
 
 function assertEqual(actual, expected, label) {
   if (actual !== expected) {
@@ -284,6 +288,21 @@ function checkOcrFallbackProgressUsesStageSteps() {
   assertEqual(presentation.progressText, "OCR 准备中", "OCR fallback text");
   assertEqual(presentation.progressCurrent, 1, "OCR fallback current");
   assertEqual(presentation.progressTotal, 4, "OCR fallback total");
+  assertEqual(presentation.progressIndeterminate, true, "OCR fallback is indeterminate");
+}
+
+function checkOcrRealPageProgressIsDeterminate() {
+  const job = {
+    status: "running",
+    stage: "ocr_processing",
+    current_stage: "ocr_processing",
+    stage_detail: "OCR 子任务：Paddle 正在解析文件",
+    progress_current: 9,
+    progress_total: 24,
+  };
+  const presentation = resolveDisplayedStagePresentation(job, { items: [] });
+  assertEqual(presentation.progressText, "第 9/24 页", "OCR real page text");
+  assertEqual(presentation.progressIndeterminate, false, "OCR real page is determinate");
 }
 
 function checkOcrInternalStagesUseDistinctAnimationKeys() {
@@ -412,6 +431,48 @@ function checkRenderPrepareDoesNotLookLikeOcr() {
   assertEqual(presentation.label, "第 3/4 步 · 渲染", "Render prepare label");
 }
 
+function checkSelectedFutureStageUsesSelectedAnimation() {
+  const visualStageKey = resolveVisualStageKeyForSnapshot(
+    {
+      stageKey: "ocr",
+      visualStageKey: "ocr_processing",
+    },
+    "translate",
+  );
+  assertEqual(visualStageKey, "translate", "Manual selected stage animation");
+}
+
+function checkHistoricalOcrProgressCanBeRecoveredFromEvents() {
+  const progressByKey = collectStageProgressByKey(
+    {
+      status: "succeeded",
+      stage: "finished",
+      current_stage: "finished",
+      stage_detail: "任务完成",
+    },
+    {
+      items: [
+        {
+          stage: "ocr_processing",
+          event_type: "stage_progress",
+          stage_detail: "OCR 子任务：Paddle 正在解析文件",
+          progress_current: 15,
+          progress_total: 22,
+        },
+        {
+          stage: "translating",
+          event_type: "stage_progress",
+          stage_detail: "正在翻译正文，第 2/9 批",
+          progress_current: 2,
+          progress_total: 9,
+        },
+      ],
+    },
+  );
+  assertEqual(progressByKey.ocr.progressText, "第 15/22 页", "Historical OCR progress text");
+  assertEqual(progressByKey.translate.progressText, "第 2/9 批", "Historical translate progress text");
+}
+
 checkOcrPresentationUsesPageProgress();
 checkOcrPresentationIgnoresFutureStageEvents();
 checkOcrPresentationFallsBackToJobProgress();
@@ -423,6 +484,7 @@ checkTranslateUsesLatestSubstageProgress();
 checkTranslateUsesLatestProgressfulEvent();
 checkOcrPercentProgressDoesNotLookLikePages();
 checkOcrFallbackProgressUsesStageSteps();
+checkOcrRealPageProgressIsDeterminate();
 checkOcrInternalStagesUseDistinctAnimationKeys();
 checkOcrResultReadyStaysInOcrStage();
 checkOcrUploadWaitingDoesNotLookQueued();
@@ -431,5 +493,7 @@ checkCompletedStageHasDoneKeyAndNoProgressTextRequirement();
 checkRunningFinishedStageStaysInRenderUntilTerminal();
 checkStartupStageUsesWorkflowContext();
 checkRenderPrepareDoesNotLookLikeOcr();
+checkSelectedFutureStageUsesSelectedAnimation();
+checkHistoricalOcrProgressCanBeRecoveredFromEvents();
 
 console.log("status presentation smoke passed");

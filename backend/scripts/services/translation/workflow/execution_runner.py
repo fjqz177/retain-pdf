@@ -5,6 +5,9 @@ from typing import TYPE_CHECKING
 from services.translation.diagnostics import aggregate_payload_diagnostics
 from services.translation.diagnostics import translation_run_diagnostics_scope
 from services.translation.payload import write_translation_manifest
+from services.rendering.source.prewarm import RenderPrewarmHandle
+from services.rendering.source.prewarm import RenderPrewarmSpec
+from services.rendering.source.prewarm import start_render_source_prewarm
 from services.translation.terms import summarize_glossary_usage
 from services.translation.workflow.translation_workflow import default_page_translation_name
 
@@ -21,6 +24,12 @@ def run_translation_execution_plan(
     from services.translation.workflow.book_flow import translate_book_with_global_continuations
 
     glossary_entries = request.glossary_entries or []
+    prewarm_handle: RenderPrewarmHandle | None = None
+
+    def _set_prewarm_handle(handle: RenderPrewarmHandle | None) -> None:
+        nonlocal prewarm_handle
+        prewarm_handle = handle
+
     with translation_run_diagnostics_scope(plan.run_diagnostics):
         translated_pages_map, summaries = translate_book_with_global_continuations(
             data=plan.data,
@@ -40,7 +49,28 @@ def run_translation_execution_plan(
             domain_guidance=plan.policy_config.domain_guidance,
             translation_context=plan.translation_context,
             run_diagnostics=plan.run_diagnostics,
+            render_prewarm_start_fn=(
+                lambda page_payloads: start_render_source_prewarm(
+                    RenderPrewarmSpec(
+                        source_pdf_path=request.source_pdf_path,
+                        output_pdf_path=request.render_prewarm_output_pdf_path,
+                        artifacts_dir=request.render_prewarm_artifacts_dir,
+                        translated_pages={page_idx: [dict(item) for item in items] for page_idx, items in page_payloads.items()},
+                        render_mode=request.render_prewarm_mode,
+                        start_page=plan.start,
+                        end_page=plan.stop,
+                        pdf_compress_dpi=request.render_prewarm_pdf_compress_dpi,
+                    )
+                )
+                if request.source_pdf_path is not None
+                and request.render_prewarm_output_pdf_path is not None
+                and request.render_prewarm_artifacts_dir is not None
+                else None
+            ),
+            render_prewarm_handle_sink=lambda handle: _set_prewarm_handle(handle),
         )
+    if prewarm_handle is not None:
+        prewarm_handle.wait()
     total_items = sum(item["total_items"] for item in summaries)
     translated_items = sum(item["translated_items"] for item in summaries)
     glossary_summary = summarize_glossary_usage(

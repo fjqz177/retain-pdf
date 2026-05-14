@@ -7,7 +7,7 @@ from services.rendering.layout.inline_content.core.markdown import build_plain_t
 from services.rendering.layout.payload.capacity import estimated_render_height_pt
 from services.rendering.layout.payload.capacity import estimated_required_lines
 from services.rendering.layout.payload.capacity import text_demand_units
-from services.rendering.layout.typography.geometry import inner_bbox
+from services.rendering.layout.payload.fit_common import fit_inner_bbox
 from services.translation.item_reader import item_layout_role
 from services.translation.item_reader import item_structure_role
 
@@ -99,7 +99,7 @@ def solve_title_fit(
 ) -> TitleFitDecision | None:
     if not is_title_like_block(item) or not protected_text:
         return None
-    inner = inner_bbox(item)
+    inner = fit_inner_bbox(item)
     if len(inner) != 4:
         return None
 

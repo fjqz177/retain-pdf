@@ -66,24 +66,51 @@ pub(super) fn row_to_job_event(row: &Row<'_>) -> rusqlite::Result<JobEventRecord
     let payload_json: Option<String> = row.get(12)?;
     let event: String = row.get(8)?;
     let event_type: Option<String> = row.get(9)?;
+    let stage: Option<String> = row.get(4)?;
+    let provider_stage: Option<String> = row.get(7)?;
     Ok(JobEventRecord {
         job_id: row.get(0)?,
         seq: row.get(1)?,
         ts: row.get(2)?,
         level: row.get(3)?,
-        stage: row.get(4)?,
+        user_stage: user_stage_for_event(stage.as_deref()),
+        stage: stage.clone(),
+        substage: provider_stage.clone(),
         stage_detail: row.get(5)?,
         provider: row.get(6)?,
-        provider_stage: row.get(7)?,
+        provider_stage,
         event: event.clone(),
-        event_type: event_type.or_else(|| Some(event)),
+        event_type: event_type.or_else(|| Some(event.clone())),
         progress_current: row.get(10)?,
         progress_total: row.get(11)?,
+        progress_unit: progress_unit_for_event(stage.as_deref(), &event),
         retry_count: row.get::<_, Option<i64>>(13)?.map(|value| value as u32),
         elapsed_ms: row.get(14)?,
         payload: payload_json.and_then(|text| serde_json::from_str(&text).ok()),
         message: row.get(15)?,
     })
+}
+
+fn user_stage_for_event(stage: Option<&str>) -> Option<String> {
+    match stage.map(str::trim).unwrap_or_default() {
+        "ocr_upload" | "ocr_processing" | "ocr_result_ready" | "normalizing" => Some("ocr".to_string()),
+        "translation_prepare" | "translating" | "translation_batches" | "continuation_review" | "page_policies"
+        | "domain_inference" | "garbled_repair" => Some("translate".to_string()),
+        "render_prepare" | "rendering" | "compile" | "overlay" | "saving" => Some("render".to_string()),
+        "finished" | "done" => Some("done".to_string()),
+        _ => None,
+    }
+}
+
+fn progress_unit_for_event(stage: Option<&str>, event: &str) -> Option<String> {
+    let unit = match stage.map(str::trim).unwrap_or_default() {
+        "translating" | "translation_batches" => "batch",
+        "ocr_processing" | "continuation_review" | "page_policies" | "domain_inference" | "garbled_repair" | "rendering" => "page",
+        "compile" | "overlay" | "saving" | "render_prepare" | "translation_prepare" | "normalizing" => "step",
+        _ if event == "stage_progress" => "step",
+        _ => "none",
+    };
+    Some(unit.to_string())
 }
 
 pub(super) fn row_to_job_artifact_record(row: &Row<'_>) -> rusqlite::Result<JobArtifactRecord> {

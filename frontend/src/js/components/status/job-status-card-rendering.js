@@ -26,6 +26,7 @@ export function setProgress(host, {
   progressText = "",
   stageKey = "",
   forceVisible = null,
+  indeterminate = false,
 } = {}) {
   const normalizedStageKey = `${stageKey || ""}`.trim();
   const shouldShowProgress = forceVisible ?? ["ocr", "translate", "render"].includes(normalizedStageKey);
@@ -38,7 +39,14 @@ export function setProgress(host, {
   block?.classList.toggle("hidden", !shouldShowProgress);
   if (!shouldShowProgress) {
     bar.style.width = "0%";
+    bar.classList.remove("is-indeterminate");
     text.textContent = "";
+    return;
+  }
+  bar.classList.toggle("is-indeterminate", Boolean(indeterminate));
+  if (indeterminate) {
+    bar.style.width = "42%";
+    text.textContent = progressText || fallbackText;
     return;
   }
   const hasNumbers = Number.isFinite(current) && Number.isFinite(total) && total > 0;

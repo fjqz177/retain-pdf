@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from foundation.config import layout
 
+from services.rendering.layout.typography.cover_geometry import expanded_cover_bbox
 from services.rendering.layout.typography.measurement import occupied_ratio
 from services.rendering.layout.typography.measurement import occupied_ratio_x
 
@@ -46,5 +47,5 @@ def cover_bbox(item: dict) -> list[float]:
     if item.get("_cover_with_inner_bbox"):
         inner = inner_bbox(item)
         if len(inner) == 4:
-            return inner
-    return bbox
+            return expanded_cover_bbox(item, inner)
+    return expanded_cover_bbox(item, bbox)

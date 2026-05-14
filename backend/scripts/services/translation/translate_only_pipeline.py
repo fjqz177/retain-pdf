@@ -83,6 +83,10 @@ def _args_from_spec(spec: TranslateStageSpec) -> SimpleNamespace:
         api_key=resolve_credential_ref(spec.params.credential_ref),
         model=spec.params.model,
         base_url=spec.params.base_url,
+        render_prewarm_output_pdf_path=spec.params.render_prewarm_output_pdf_path,
+        render_prewarm_artifacts_dir=job_dirs.artifacts_dir,
+        render_prewarm_mode=spec.params.render_prewarm_mode,
+        render_prewarm_pdf_compress_dpi=spec.params.render_prewarm_pdf_compress_dpi,
     )
 
 
@@ -156,6 +160,10 @@ def main() -> None:
                     stage="translate",
                     stage_spec_schema_version=stage_spec_schema_version,
                 ),
+                render_prewarm_output_pdf_path=args.render_prewarm_output_pdf_path,
+                render_prewarm_artifacts_dir=args.render_prewarm_artifacts_dir,
+                render_prewarm_mode=args.render_prewarm_mode,
+                render_prewarm_pdf_compress_dpi=args.render_prewarm_pdf_compress_dpi,
             )
         ).to_mapping()
         elapsed = time.perf_counter() - started

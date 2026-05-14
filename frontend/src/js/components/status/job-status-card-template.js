@@ -27,14 +27,23 @@ export function jobStatusCardTemplate({
       <div class="status-focus-card">
         <div class="status-focus-top">
           <div id="status-stage-flow" class="status-stage-flow" role="tablist" aria-label="任务流程">
-            <button type="button" class="status-stage-step" data-stage-key="ocr" role="tab">OCR</button>
-            <button type="button" class="status-stage-step" data-stage-key="translate" role="tab">翻译</button>
-            <button type="button" class="status-stage-step" data-stage-key="render" role="tab">渲染</button>
-            <button type="button" class="status-stage-step" data-stage-key="done" role="tab">完成</button>
+            <button type="button" class="status-stage-step" data-stage-key="ocr" role="tab">
+              <span class="status-stage-step-name">OCR</span>
+            </button>
+            <button type="button" class="status-stage-step" data-stage-key="translate" role="tab">
+              <span class="status-stage-step-name">翻译</span>
+            </button>
+            <button type="button" class="status-stage-step" data-stage-key="render" role="tab">
+              <span class="status-stage-step-name">渲染</span>
+            </button>
+            <button type="button" class="status-stage-step" data-stage-key="done" role="tab">
+              <span class="status-stage-step-name">完成</span>
+            </button>
           </div>
         </div>
         <div class="status-focus-body">
           <div id="status-ring-label" class="status-ring-label">等待中</div>
+          <div id="status-stage-progress-summary" class="status-stage-progress-summary hidden"></div>
           <div id="status-ring-value" class="status-ring-value hidden">准备中</div>
           <div id="status-stage-detail" class="status-stage-detail hidden">-</div>
           <div id="status-stage-animation" class="status-stage-animation hidden" aria-label="任务阶段动画">

@@ -30,6 +30,10 @@ def _should_fast_save(context: RenderExecutionContext) -> bool:
     return context.source_image_compressed or context.pdf_compress_dpi <= 0
 
 
+def _indent_detection_pdf_path(context: RenderExecutionContext, fallback: Path) -> Path:
+    return context.indent_detection_pdf_path or fallback
+
+
 def run_dual_render(
     *,
     source_pdf_path: Path,
@@ -49,6 +53,9 @@ def run_dual_render(
         font_family=context.typst_font_family,
         cover_only=False,
         fast_save=_should_fast_save(context),
+        indent_detection_pdf_path=_indent_detection_pdf_path(context, source_pdf_path),
+        first_line_indent_lookup=context.first_line_indent_lookup,
+        effective_inner_bbox_lookup=context.effective_inner_bbox_lookup,
     )
     final_compressed = _compress_final_pdf_if_needed(context, mode="dual")
     return len(translated_pages), {"mode": "dual", "final_image_compressed": final_compressed}
@@ -80,6 +87,9 @@ def run_selected_pages_overlay_render(
             font_family=context.typst_font_family,
             temp_root=default_typst_temp_root(context.output_pdf_path),
             cover_only=False,
+            source_pdf_path=_indent_detection_pdf_path(context, source_pdf_path),
+            first_line_indent_lookup=context.first_line_indent_lookup,
+            effective_inner_bbox_lookup=context.effective_inner_bbox_lookup,
         )
         if _should_fast_save(context):
             save_fast_pdf(temp_doc, context.output_pdf_path)
@@ -111,6 +121,9 @@ def run_overlay_render(
         font_family=context.typst_font_family,
         cover_only=False,
         fast_save=_should_fast_save(context),
+        indent_detection_pdf_path=_indent_detection_pdf_path(context, source_pdf_path),
+        first_line_indent_lookup=context.first_line_indent_lookup,
+        effective_inner_bbox_lookup=context.effective_inner_bbox_lookup,
     )
     final_compressed = _compress_final_pdf_if_needed(context, mode="overlay")
     diagnostics = dict(overlay_diagnostics)
@@ -138,6 +151,9 @@ def run_background_typst_render(
         base_url=context.base_url,
         font_family=context.typst_font_family,
         redaction_strategy="visual_cover" if visual_only_background else None,
+        indent_detection_pdf_path=_indent_detection_pdf_path(context, source_pdf_path),
+        first_line_indent_lookup=context.first_line_indent_lookup,
+        effective_inner_bbox_lookup=context.effective_inner_bbox_lookup,
     )
     mode = "typst_visual" if visual_only_background else "typst"
     final_compressed = _compress_final_pdf_if_needed(context, mode=mode)

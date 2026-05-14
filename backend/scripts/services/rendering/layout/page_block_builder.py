@@ -103,6 +103,7 @@ def layout_block_from_item(
         math_map=list(formula_map),
         font_size_pt=font_size_pt,
         leading_em=leading_em,
+        first_line_indent_pt=max(0.0, float(item.get("_render_first_line_indent_pt") or 0.0)),
         font_weight=resolve_font_weight(item),
         fit_to_box=fit_to_box,
         fit_single_line=fit_single_line,

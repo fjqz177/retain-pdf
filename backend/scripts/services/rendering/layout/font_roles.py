@@ -8,6 +8,7 @@ from services.rendering.layout.typography.measurement import source_visual_line_
 from services.translation.item_reader import item_block_kind
 from services.translation.item_reader import item_is_bodylike
 from services.translation.item_reader import item_is_caption_like
+from services.translation.item_reader import item_is_footnote_like
 from services.translation.item_reader import item_is_plain_text_block
 from services.translation.item_reader import item_is_textual
 from services.translation.item_reader import item_is_title_like
@@ -22,6 +23,10 @@ def is_caption_like_block(item: dict) -> bool:
     return item_is_caption_like(item)
 
 
+def is_footnote_like_block(item: dict) -> bool:
+    return item_is_footnote_like(item)
+
+
 def item_layout_role_name(item: dict) -> str:
     return item_layout_role(item)
 
@@ -31,7 +36,7 @@ def item_semantic_role_name(item: dict) -> str:
 
 
 def is_local_textual_item(item: dict) -> bool:
-    if is_caption_like_block(item):
+    if is_caption_like_block(item) or is_footnote_like_block(item):
         return True
     if item_is_title_like(item):
         return True
@@ -41,7 +46,7 @@ def is_local_textual_item(item: dict) -> bool:
 
 
 def is_body_text_candidate(item: dict, page_text_width_med: float) -> bool:
-    if is_caption_like_block(item):
+    if is_caption_like_block(item) or is_footnote_like_block(item):
         return False
     layout_role = item_layout_role_name(item)
     semantic_role = item_semantic_role_name(item)
@@ -87,6 +92,7 @@ __all__ = [
     "is_body_text_candidate",
     "is_caption_like_block",
     "is_default_text_block",
+    "is_footnote_like_block",
     "is_local_textual_item",
     "is_title_like_block",
     "item_layout_role_name",

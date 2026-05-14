@@ -2,10 +2,12 @@ from __future__ import annotations
 
 
 CAPTION_TAGS = {"caption", "figure_caption", "image_caption", "table_caption", "table_footnote", "image_footnote"}
+FOOTNOTE_TAGS = {"footnote", "image_footnote", "table_footnote", "vision_footnote"}
 REFERENCE_HEADING_TAGS = {"reference_heading"}
 REFERENCE_ENTRY_TAGS = {"reference_entry", "reference_zone"}
 ALGORITHM_TAGS = {"algorithm"}
 CAPTION_BLOCK_TYPES = {"figure_caption", "image_caption", "table_caption", "table_footnote"}
+FOOTNOTE_BLOCK_TYPES = {"footnote", "image_footnote", "table_footnote", "vision_footnote"}
 BODYLIKE_LAYOUT_ROLES = {"paragraph", "list_item"}
 BODYLIKE_SEMANTIC_ROLES = {"body", "abstract"}
 BODYLIKE_STRUCTURE_ROLES = {"", "body", "abstract", "example_line", "option_header", "option_description", "example_intro"}
@@ -72,6 +74,20 @@ def is_caption_like_block(payload: dict | None) -> bool:
         return True
     block_type = str(source.get("block_type", source.get("type", "")) or "").strip().lower()
     return block_type in CAPTION_BLOCK_TYPES
+
+
+def is_footnote_like_block(payload: dict | None) -> bool:
+    source = payload or {}
+    if layout_role(source) == "footnote":
+        return True
+    if structure_role(source) in FOOTNOTE_TAGS:
+        return True
+    if derived_role(source) in FOOTNOTE_TAGS:
+        return True
+    if has_any_tag(source, FOOTNOTE_TAGS):
+        return True
+    block_type = str(source.get("block_type", source.get("type", "")) or "").strip().lower()
+    return block_type in FOOTNOTE_BLOCK_TYPES
 
 
 def is_reference_heading_semantic(payload: dict | None) -> bool:
@@ -143,6 +159,7 @@ def build_role_profile(payload: dict | None) -> dict[str, object]:
         "normalized_sub_type": normalized_sub_type(source),
         "policy_translate": policy_translate(source),
         "is_caption_like": is_caption_like_block(source),
+        "is_footnote_like": is_footnote_like_block(source),
         "is_reference_heading": is_reference_heading_semantic(source),
         "is_reference_entry": is_reference_entry_semantic(source),
         "is_algorithm": is_algorithm_semantic(source),

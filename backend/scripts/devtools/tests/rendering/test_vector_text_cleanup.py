@@ -105,3 +105,30 @@ def test_bbox_text_strip_rects_shrink_away_from_adjacent_display_formula() -> No
     assert len(rects) == 1
     formula_top_in_pdf_coords = page_height - items[1]["bbox"][3]
     assert rects[0].y0 > formula_top_in_pdf_coords
+
+
+def test_bbox_text_strip_rects_split_around_overlapping_display_formula() -> None:
+    page_height = 655.228
+    items = [
+        {
+            "block_type": "text",
+            "bbox": [44.5, 455.8, 385.7, 507.3],
+            "protected_translated_text": "正文译文",
+        },
+        {
+            "block_type": "formula",
+            "bbox": [177.9, 458.8, 250.8, 484.8],
+            "source_text": "$$ \\frac{a}{b} $$",
+        },
+    ]
+
+    rects = _page_text_rects(page_height=page_height, translated_items=items)
+    formula = fitz.Rect(
+        items[1]["bbox"][0],
+        page_height - items[1]["bbox"][3],
+        items[1]["bbox"][2],
+        page_height - items[1]["bbox"][1],
+    )
+
+    assert rects
+    assert all((rect & formula).is_empty for rect in rects)

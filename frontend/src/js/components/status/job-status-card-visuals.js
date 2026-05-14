@@ -7,9 +7,6 @@ export function resolveVisualStageKeyForSnapshot(snapshot = null, selectedStageK
   if (!selected || selected === stageKey) {
     return visualStageKey || stageKey;
   }
-  if (stageKey === "ocr" && selected !== "ocr") {
-    return visualStageKey || "ocr";
-  }
   return selected;
 }
 

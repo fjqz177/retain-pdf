@@ -499,6 +499,8 @@ mod tests {
             .find(|item| item["event_type"] == "stage_progress")
             .expect("pipeline event item");
         assert_eq!(pipeline_item["provider"], "paddle");
+        assert_eq!(pipeline_item["user_stage"], "translate");
+        assert_eq!(pipeline_item["progress_unit"], "batch");
         assert_eq!(pipeline_item["progress_current"], 2);
         assert_eq!(pipeline_item["payload"]["origin"], "python");
     }

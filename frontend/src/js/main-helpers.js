@@ -29,6 +29,11 @@ export function getRequestedReaderJobIdFromLocation() {
   return view === "reader" && jobId ? jobId : "";
 }
 
+export function getRequestedJobIdFromLocation() {
+  const url = new URL(window.location.href);
+  return `${url.searchParams.get("job_id") || ""}`.trim();
+}
+
 export function setText(id, value) {
   const el = $(id);
   if (el) {

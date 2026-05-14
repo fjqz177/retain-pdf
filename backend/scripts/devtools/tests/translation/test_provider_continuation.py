@@ -425,6 +425,65 @@ def test_provider_cross_page_short_fragments_are_not_consumed() -> None:
     assert payload[0]["continuation_group"] != "provider-paddle-global-abc"
 
 
+def test_vision_footnote_is_not_eligible_for_provider_or_rule_continuation() -> None:
+    state = _load_state_module()
+    payload = [
+        _payload_item(
+            item_id="body",
+            page_idx=0,
+            text="This body sentence continues with",
+            bbox=[0, 0, 180, 20],
+        ),
+        _payload_item(
+            item_id="footnote-a",
+            page_idx=0,
+            text="footnote note continues with",
+            bbox=[0, 30, 180, 45],
+            ocr_source="provider",
+            ocr_group_id="provider-paddle-footnote",
+            ocr_scope="intra_page",
+            ocr_order=0,
+        ),
+        _payload_item(
+            item_id="footnote-b",
+            page_idx=0,
+            text="and details in the lower note.",
+            bbox=[190, 30, 360, 45],
+            ocr_source="provider",
+            ocr_group_id="provider-paddle-footnote",
+            ocr_scope="intra_page",
+            ocr_order=1,
+        ),
+        _payload_item(
+            item_id="body-next",
+            page_idx=1,
+            text="and additional evidence from the experiment.",
+            bbox=[0, 0, 180, 20],
+        ),
+    ]
+    for item in payload[1:3]:
+        item.update(
+            {
+                "layout_role": "footnote",
+                "semantic_role": "metadata",
+                "structure_role": "footnote",
+                "raw_block_type": "vision_footnote",
+                "normalized_sub_type": "table_footnote",
+            }
+        )
+
+    state.annotate_continuation_context(payload)
+
+    assert payload[0]["continuation_decision"] == "joined"
+    assert payload[3]["continuation_decision"] == "joined"
+    assert payload[1]["continuation_decision"] == ""
+    assert payload[2]["continuation_decision"] == ""
+    assert payload[1]["continuation_group"] == ""
+    assert payload[2]["continuation_group"] == ""
+    assert payload[0]["continuation_candidate_next_id"] != "footnote-a"
+    assert payload[2]["continuation_candidate_next_id"] != "body-next"
+
+
 def test_generic_provider_continuation_hint_flows_through_extractor_and_template() -> None:
     state = _load_state_module()
     adapted = adapt_payload_to_document_v1(

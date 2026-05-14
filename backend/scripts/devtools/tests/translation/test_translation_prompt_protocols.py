@@ -238,6 +238,11 @@ def test_build_messages_direct_typst_includes_inline_math_and_local_ocr_repair_g
     assert "当前启用 direct_typst 公式直出模式" in system_prompt
     assert "请先理解整句语义" in system_prompt
     assert "请主动用 `$...$` 包裹" in system_prompt
+    assert "只能使用单个反斜杠" in system_prompt
+    assert r"\text{g}" in system_prompt
+    assert r"\\text{g}" in system_prompt
+    assert r"\cite{117}" in system_prompt
+    assert "上标引用" in system_prompt
     assert "最小修复" in system_prompt
     assert "不要补写缺失的正文内容" in system_prompt
     assert "<<<ITEM item_id=ITEM_ID>>>" in system_prompt
@@ -262,6 +267,11 @@ def test_build_single_item_fallback_messages_direct_typst_includes_inline_math_a
     assert "当前启用 direct_typst 公式直出模式" in system_prompt
     assert "请先理解整句语义" in system_prompt
     assert "请主动用 `$...$` 包裹" in system_prompt
+    assert "只能使用单个反斜杠" in system_prompt
+    assert r"\text{g}" in system_prompt
+    assert r"\\text{g}" in system_prompt
+    assert r"\cite{117}" in system_prompt
+    assert "上标引用" in system_prompt
     assert "最小修复" in system_prompt
     assert "不要补写缺失的正文内容" in system_prompt
     assert r"\mu" in messages[1]["content"]

@@ -23,9 +23,14 @@ class RenderBlock:
     fit_target_width_pt: float = 0.0
     fit_target_height_pt: float = 0.0
     fit_shift_up_pt: float = 0.0
+    first_line_indent_pt: float = 0.0
+    justify_text: bool = False
     text_color: tuple[float, float, float] = (0, 0, 0)
     cover_fill: tuple[float, float, float] = (1, 1, 1)
     use_cover_fill: bool = False
+    math_map: list[dict] | None = None
+    skip_reason: str = ""
+    source_item_id: str = ""
 
 
 @dataclass
@@ -50,6 +55,8 @@ class RenderLayoutBlock:
     fit_target_width_pt: float = 0.0
     fit_target_height_pt: float = 0.0
     fit_shift_up_pt: float = 0.0
+    first_line_indent_pt: float = 0.0
+    justify_text: bool = False
     skip_reason: str = ""
 
 

@@ -100,6 +100,10 @@ def item_is_caption_like(item: dict | None) -> bool:
     return bool(build_role_profile(item).get("is_caption_like"))
 
 
+def item_is_footnote_like(item: dict | None) -> bool:
+    return bool(build_role_profile(item).get("is_footnote_like"))
+
+
 def item_is_reference_like(item: dict | None) -> bool:
     return bool(build_role_profile(item).get("is_reference_entry"))
 
@@ -126,7 +130,7 @@ def item_is_textual(item: dict | None) -> bool:
 
 def item_is_plain_text_block(item: dict | None) -> bool:
     return item_block_kind(item) == "text" and not (
-        item_is_caption_like(item) or item_is_reference_like(item) or item_is_title_like(item)
+        item_is_caption_like(item) or item_is_footnote_like(item) or item_is_reference_like(item) or item_is_title_like(item)
     )
 
 
@@ -142,6 +146,7 @@ __all__ = [
     "item_is_bodylike",
     "item_is_algorithm_like",
     "item_is_caption_like",
+    "item_is_footnote_like",
     "item_is_plain_text_block",
     "item_is_reference_heading_like",
     "item_is_reference_like",

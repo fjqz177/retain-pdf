@@ -21,6 +21,9 @@ struct PendingJobEvent {
     stage_detail: Option<String>,
     provider: Option<String>,
     provider_stage: Option<String>,
+    user_stage: Option<String>,
+    substage: Option<String>,
+    progress_unit: Option<String>,
     event: String,
     message: String,
     progress_current: Option<i64>,
@@ -64,13 +67,16 @@ pub fn record_custom_job_event_with_resources(
     message: impl Into<String>,
     payload: Option<Value>,
 ) {
-    let pending = PendingJobEvent {
-        level: level.to_string(),
-        stage: job.stage.clone(),
-        stage_detail: job.stage_detail.clone(),
-        provider: event_provider(job),
-        provider_stage: event_provider_stage(job),
-        event: event.to_string(),
+        let pending = PendingJobEvent {
+            level: level.to_string(),
+            stage: job.stage.clone(),
+            stage_detail: job.stage_detail.clone(),
+            provider: event_provider(job),
+            provider_stage: event_provider_stage(job),
+            user_stage: user_stage_for_event(job.stage.as_deref()),
+            substage: event_provider_stage(job),
+            progress_unit: progress_unit_for_event(job.stage.as_deref(), event),
+            event: event.to_string(),
         message: message.into(),
         progress_current: job.progress_current,
         progress_total: job.progress_total,
@@ -142,6 +148,21 @@ fn append_pending_event(
         pending.retry_count,
         pending.elapsed_ms,
     )?;
+    let event = JobEventRecord {
+        user_stage: pending
+            .user_stage
+            .clone()
+            .or_else(|| user_stage_for_event(event.stage.as_deref())),
+        substage: pending
+            .substage
+            .clone()
+            .or_else(|| event.provider_stage.clone()),
+        progress_unit: pending
+            .progress_unit
+            .clone()
+            .or_else(|| progress_unit_for_event(event.stage.as_deref(), &event.event)),
+        ..event
+    };
     append_event_jsonl(data_root, output_root, job, &event)?;
     Ok(event)
 }
@@ -176,6 +197,9 @@ fn derive_events(previous: Option<&JobSnapshot>, current: &JobSnapshot) -> Vec<P
             stage_detail: current.stage_detail.clone(),
             provider: event_provider(current),
             provider_stage: event_provider_stage(current),
+            user_stage: user_stage_for_event(current.stage.as_deref()),
+            substage: event_provider_stage(current),
+            progress_unit: progress_unit_for_event(current.stage.as_deref(), "job_created"),
             event: "job_created".to_string(),
             message: "任务已创建".to_string(),
             progress_current: current.progress_current,
@@ -204,6 +228,9 @@ fn derive_events(previous: Option<&JobSnapshot>, current: &JobSnapshot) -> Vec<P
             stage_detail: current.stage_detail.clone(),
             provider: event_provider(current),
             provider_stage: event_provider_stage(current),
+            user_stage: user_stage_for_event(current.stage.as_deref()),
+            substage: event_provider_stage(current),
+            progress_unit: progress_unit_for_event(current.stage.as_deref(), "status_changed"),
             event: "status_changed".to_string(),
             message: format!("任务状态变更为 {}", status_name(&current.status)),
             progress_current: current.progress_current,
@@ -225,6 +252,9 @@ fn derive_events(previous: Option<&JobSnapshot>, current: &JobSnapshot) -> Vec<P
                 stage_detail: current.stage_detail.clone(),
                 provider: event_provider(current),
                 provider_stage: event_provider_stage(current),
+                user_stage: user_stage_for_event(current.stage.as_deref()),
+                substage: event_provider_stage(current),
+                progress_unit: progress_unit_for_event(current.stage.as_deref(), "job_terminal"),
                 event: "job_terminal".to_string(),
                 message: format!("任务进入终态 {}", status_name(&current.status)),
                 progress_current: current.progress_current,
@@ -256,6 +286,9 @@ fn derive_events(previous: Option<&JobSnapshot>, current: &JobSnapshot) -> Vec<P
             stage_detail: current.stage_detail.clone(),
             provider: event_provider(current),
             provider_stage: event_provider_stage(current),
+            user_stage: user_stage_for_event(current.stage.as_deref()),
+            substage: event_provider_stage(current),
+            progress_unit: progress_unit_for_event(current.stage.as_deref(), "stage_updated"),
             event: "stage_updated".to_string(),
             message: current
                 .stage_detail
@@ -279,6 +312,12 @@ fn derive_events(previous: Option<&JobSnapshot>, current: &JobSnapshot) -> Vec<P
             stage_detail: current.stage_detail.clone(),
             provider: event_provider(current),
             provider_stage: event_provider_stage(current),
+            user_stage: user_stage_for_event(current.stage.as_deref()),
+            substage: event_provider_stage(current),
+            progress_unit: progress_unit_for_event(
+                current.stage.as_deref(),
+                if stage_changed { "stage_transition" } else { "stage_progress" },
+            ),
             event: if stage_changed {
                 "stage_transition".to_string()
             } else {
@@ -319,6 +358,9 @@ fn derive_events(previous: Option<&JobSnapshot>, current: &JobSnapshot) -> Vec<P
                 stage_detail: current.stage_detail.clone(),
                 provider: event_provider(current),
                 provider_stage: event_provider_stage(current),
+                user_stage: user_stage_for_event(current.stage.as_deref()),
+                substage: event_provider_stage(current),
+                progress_unit: progress_unit_for_event(current.stage.as_deref(), "job_error"),
                 event: "job_error".to_string(),
                 message: error.clone(),
                 progress_current: current.progress_current,
@@ -343,6 +385,12 @@ fn derive_events(previous: Option<&JobSnapshot>, current: &JobSnapshot) -> Vec<P
                     .provider_stage
                     .clone()
                     .or_else(|| event_provider_stage(current)),
+                user_stage: user_stage_for_event(current.stage.as_deref()),
+                substage: failure
+                    .provider_stage
+                    .clone()
+                    .or_else(|| event_provider_stage(current)),
+                progress_unit: progress_unit_for_event(current.stage.as_deref(), "failure_classified"),
                 event: "failure_classified".to_string(),
                 message: failure.summary.clone(),
                 progress_current: current.progress_current,
@@ -418,6 +466,28 @@ fn event_retry_count(job: &JobSnapshot) -> Option<u32> {
     job.runtime.as_ref().map(|runtime| runtime.retry_count)
 }
 
+fn user_stage_for_event(stage: Option<&str>) -> Option<String> {
+    match stage.map(str::trim).unwrap_or_default() {
+        "ocr_upload" | "ocr_processing" | "ocr_result_ready" | "normalizing" => Some("ocr".to_string()),
+        "translation_prepare" | "translating" | "translation_batches" | "continuation_review" | "page_policies"
+        | "domain_inference" | "garbled_repair" => Some("translate".to_string()),
+        "render_prepare" | "rendering" | "compile" | "overlay" | "saving" => Some("render".to_string()),
+        "finished" | "done" => Some("done".to_string()),
+        _ => None,
+    }
+}
+
+fn progress_unit_for_event(stage: Option<&str>, event: &str) -> Option<String> {
+    let unit = match stage.map(str::trim).unwrap_or_default() {
+        "translating" | "translation_batches" => "batch",
+        "ocr_processing" | "continuation_review" | "page_policies" | "domain_inference" | "garbled_repair" | "rendering" => "page",
+        "compile" | "overlay" | "saving" | "render_prepare" | "translation_prepare" | "normalizing" => "step",
+        _ if event == "stage_progress" => "step",
+        _ => "none",
+    };
+    Some(unit.to_string())
+}
+
 fn event_elapsed_ms(job: &JobSnapshot) -> Option<i64> {
     job.runtime
         .as_ref()
@@ -482,6 +552,8 @@ mod tests {
         assert_eq!(transition.stage_detail.as_deref(), Some("正在翻译"));
         assert_eq!(transition.provider.as_deref(), Some("paddle"));
         assert_eq!(transition.event, "stage_transition");
+        assert_eq!(transition.user_stage.as_deref(), Some("translate"));
+        assert_eq!(transition.progress_unit.as_deref(), Some("batch"));
     }
 
     #[test]

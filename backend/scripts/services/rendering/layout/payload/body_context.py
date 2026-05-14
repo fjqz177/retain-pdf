@@ -171,12 +171,13 @@ def cap_leading_growth_by_density(payload: dict, target_leading_em: float, *, de
 
 def normalize_body_payload_leading(payload: dict) -> None:
     reference_font_size_pt = payload.get("page_body_font_size_pt") or payload["font_size_pt"]
+    max_leading_em = max(BODY_LEADING_MAX, float(payload.get("_body_dynamic_leading_cap_em") or BODY_LEADING_MAX))
     payload["leading_em"] = normalize_leading_em_for_font_size(
         payload["font_size_pt"],
         payload["leading_em"],
         reference_font_size_pt=reference_font_size_pt,
         min_leading_em=BODY_LEADING_MIN,
-        max_leading_em=BODY_LEADING_MAX,
+        max_leading_em=max_leading_em,
         strength=BODY_LEADING_SIZE_ADJUST,
         floor_min_leading_em=BODY_LEADING_FLOOR_MIN,
     )

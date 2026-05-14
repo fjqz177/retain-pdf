@@ -25,6 +25,9 @@ def layout_block_to_render_block(block: RenderLayoutBlock) -> RenderBlock:
         fit_target_width_pt=block.fit_target_width_pt,
         fit_target_height_pt=block.fit_target_height_pt,
         fit_shift_up_pt=block.fit_shift_up_pt,
+        first_line_indent_pt=block.first_line_indent_pt,
+        justify_text=block.justify_text,
+        skip_reason=block.skip_reason,
     )
 
 
@@ -35,4 +38,4 @@ def render_block_protected_text(block: RenderBlock) -> str:
 def render_block_math_map(block: RenderBlock | RenderLayoutBlock) -> list[dict]:
     if isinstance(block, RenderLayoutBlock):
         return block.math_map
-    return []
+    return list(block.math_map or [])

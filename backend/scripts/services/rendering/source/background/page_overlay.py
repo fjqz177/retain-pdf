@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import os
 from pathlib import Path
 
 import fitz
@@ -8,6 +9,7 @@ import fitz
 from services.pipeline_shared.events import emit_render_page_progress
 from services.rendering.source.cleanup.ops import merge_rects
 from services.rendering.source.cleanup.ops import remove_text_under_rects
+from services.rendering.source.cleanup.fill import draw_white_covers
 from services.rendering.source.cleanup.vector_analysis import page_drawing_count
 from services.rendering.source.cleanup.vector_analysis import page_is_vector_heavy_count
 from services.rendering.source.background import page_has_large_background_image
@@ -15,6 +17,27 @@ from services.rendering.source.background.source_overlay import apply_source_pag
 from services.rendering.output.typst.overlay_diagnostics import apply_merge_elapsed
 from services.rendering.output.typst.overlay_diagnostics import apply_redaction_diagnostics
 from services.rendering.output.typst.overlay_diagnostics import new_overlay_merge_diagnostics
+
+
+def _overlay_visual_cover_enabled() -> bool:
+    value = os.environ.get("RETAIN_PDF_OVERLAY_VISUAL_COVER", "").strip().lower()
+    if not value:
+        return True
+    return value not in {"0", "false", "no", "off"}
+
+
+def _draw_overlay_visual_covers(page: fitz.Page, cleanup_items: list[dict]) -> int:
+    cover_rects: list[fitz.Rect] = []
+    for item in cleanup_items:
+        bbox = item.get("bbox", [])
+        if len(bbox) != 4:
+            continue
+        rect = fitz.Rect(bbox)
+        if not rect.is_empty:
+            cover_rects.append(rect)
+    merged = merge_rects(cover_rects)
+    draw_white_covers(page, merged)
+    return len(merged)
 
 
 def mark_image_page_overlay_mode(page: fitz.Page, translated_items: list[dict]) -> list[dict]:
@@ -140,6 +163,29 @@ def overlay_pages_from_single_pdf(
                 diagnostics["bbox_text_cleanup_pages"] = int(
                     diagnostics.get("bbox_text_cleanup_pages", 0) or 0
                 ) + 1
+            elif _overlay_visual_cover_enabled():
+                cleanup_started = time.perf_counter()
+                cleanup_items = (redaction_pages or {}).get(page_idx) or translated_pages[page_idx]
+                cover_count = _draw_overlay_visual_covers(page, cleanup_items)
+                cleanup_elapsed = time.perf_counter() - cleanup_started
+                page_diag.update(
+                    {
+                        "items": len(cleanup_items),
+                        "raw_removable_rects": 0,
+                        "merged_removable_rects": 0,
+                        "cover_rects": cover_count,
+                        "fast_page_cover_only": False,
+                        "item_fast_cover_count": 0,
+                        "route": "overlay_visual_cover",
+                        "strategy": "visual_cover",
+                        "elapsed_seconds": cleanup_elapsed,
+                        "source_overlay_mode": "overlay_visual_cover",
+                    }
+                )
+                diagnostics["source_overlay_elapsed_seconds"] = float(
+                    diagnostics.get("source_overlay_elapsed_seconds", 0.0) or 0.0
+                ) + cleanup_elapsed
+                diagnostics["cover_rects"] = int(diagnostics.get("cover_rects", 0) or 0) + cover_count
             merge_started = time.perf_counter()
             page.show_pdf_page(page.rect, overlay_doc, overlay_page_idx, overlay=True)
             merge_elapsed = time.perf_counter() - merge_started

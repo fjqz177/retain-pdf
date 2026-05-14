@@ -17,6 +17,7 @@ from services.rendering.source.background.stage import build_clean_background_pd
 from foundation.config import fonts
 from services.rendering.layout.payload.blocks import build_render_blocks
 from services.rendering.layout.payload.body_pipeline import apply_body_payload_pipeline
+from services.rendering.layout.payload.first_line_indent import detect_first_line_indent_pt
 from services.rendering.layout.model.models import RenderLayoutBlock
 from services.rendering.layout.model.models import RenderPageSpec
 from services.rendering.layout.page_specs import build_render_page_specs
@@ -85,6 +86,66 @@ def test_typst_render_source_does_not_emit_white_cover_rects() -> None:
         assert 'fill: white' not in source
         assert 'image("background.pdf"' in source
         assert 'cmarker.render' in source
+        assert 'math.frac(style: "horizontal")' not in source
+
+
+def test_typst_book_overlay_keeps_default_fraction_layout() -> None:
+    source = build_typst_overlay_source(
+        200.0,
+        300.0,
+        [
+            {
+                "item_id": "p001-b001",
+                "page_idx": 0,
+                "block_type": "text",
+                "bbox": [10.0, 20.0, 180.0, 70.0],
+                "source_text": r"Equation \frac{a}{b}.",
+                "protected_source_text": r"Equation \frac{a}{b}.",
+                "protected_translated_text": r"公式 $\\frac{a}{b}$。",
+            }
+        ],
+    )
+
+    assert 'math.frac(style: "horizontal")' not in source
+    assert r"\\frac{a}{b}" in source
+
+
+def test_first_line_indent_detector_uses_block_ink_projection() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        pdf_path = Path(tmp) / "source.pdf"
+        doc = fitz.open()
+        page = doc.new_page(width=240, height=180)
+        page.insert_text((44, 42), "Indented first line", fontsize=10)
+        page.insert_text((24, 58), "second line of paragraph", fontsize=10)
+        page.insert_text((24, 74), "third line of paragraph", fontsize=10)
+        doc.save(pdf_path)
+        doc.close()
+
+        source_doc = fitz.open(pdf_path)
+        try:
+            indent = detect_first_line_indent_pt(
+                source_doc,
+                {
+                    "item_id": "p001-b001",
+                    "page_idx": 0,
+                    "block_type": "text",
+                    "block_kind": "text",
+                    "layout_role": "paragraph",
+                    "semantic_role": "body",
+                    "structure_role": "body",
+                    "bbox": [18.0, 30.0, 210.0, 88.0],
+                    "source_text": "Indented first line second line of paragraph third line of paragraph",
+                    "protected_source_text": "Indented first line second line of paragraph third line of paragraph",
+                    "lines": [],
+                },
+                page_idx=0,
+                font_size_pt=10.0,
+                page_text_width_med=160.0,
+            )
+        finally:
+            source_doc.close()
+
+    assert indent >= 10.0
 
 
 def test_typst_compiler_defaults_include_backend_fonts_dir() -> None:
@@ -124,6 +185,27 @@ def test_typst_compile_error_carries_structured_context() -> None:
     assert payload["return_code"] == 1
     assert payload["stderr"] == "syntax error"
     assert payload["typ_path"].endswith("probe.typ")
+
+
+def test_book_overlay_compile_falls_back_when_prebuilt_source_is_missing() -> None:
+    completed = mock.Mock(returncode=0, stdout="", stderr="")
+    with tempfile.TemporaryDirectory() as tmp:
+        work_dir = Path(tmp) / "book-overlays"
+        missing_prebuilt = Path(tmp) / "book-overlay-sources" / "book-overlay.typ.prebuilt"
+
+        with mock.patch("services.rendering.output.typst.compiler.subprocess.run", return_value=completed) as run_mock:
+            from services.rendering.output.typst.compiler import compile_typst_book_overlay_pdf
+
+            output = compile_typst_book_overlay_pdf(
+                [(200.0, 300.0, [])],
+                stem="book-overlay",
+                work_dir=work_dir,
+                prebuilt_source_path=missing_prebuilt,
+            )
+
+        assert output == work_dir / "book-overlay.pdf"
+        assert (work_dir / "book-overlay.typ").exists()
+        assert run_mock.called
 
 
 def test_render_pages_compile_uses_dynamic_project_root() -> None:
@@ -614,7 +696,11 @@ def test_build_render_page_specs_uses_layout_block_protocol() -> None:
         assert block.block_id == "item-p001-b001"
         assert block.content_kind == "markdown"
         assert "$(" in block.content_text
-        assert block.background_rect == [10.0, 20.0, 180.0, 80.0]
+        assert block.content_rect == [10.0, 20.0, 180.0, 80.0]
+        assert block.background_rect[0] < 10.0
+        assert block.background_rect[1] < 20.0
+        assert block.background_rect[2] > 180.0
+        assert block.background_rect[3] > 80.0
         assert 8.4 <= block.font_size_pt <= 11.6
         assert 0.28 <= block.leading_em <= 0.74
 
@@ -639,6 +725,82 @@ def test_typst_overlay_fit_respects_python_min_font_and_leading() -> None:
     assert "fallback_min_size - 1.2pt" not in source
     assert "min_leading - 0.12em" not in source
     assert "fallback_min_leading - 0.08em" not in source
+    assert "pdftr_fit_leading" in source
+
+
+def test_typst_overlay_emits_first_line_indent_for_markdown_blocks() -> None:
+    source = build_typst_overlay_source(
+        200.0,
+        300.0,
+        [
+            {
+                "item_id": "p001-b001",
+                "page_idx": 0,
+                "block_type": "text",
+                "block_kind": "text",
+                "layout_role": "paragraph",
+                "semantic_role": "body",
+                "structure_role": "body",
+                "bbox": [10.0, 20.0, 160.0, 82.0],
+                "lines": [{"bbox": [10.0, 20.0, 160.0, 32.0], "spans": [{"type": "text", "content": "source"}]}],
+                "source_text": "A source paragraph with first line indent.",
+                "protected_source_text": "A source paragraph with first line indent.",
+                "protected_translated_text": "这是一段需要渲染首行缩进的中文正文。",
+                "_render_first_line_indent_pt": 12.0,
+            }
+        ],
+    )
+
+    assert "first_line_indent: 12.0pt" in source
+
+
+def test_typst_overlay_justifies_body_markdown_blocks() -> None:
+    source = build_typst_overlay_source(
+        200.0,
+        300.0,
+        [
+            {
+                "item_id": "p001-b001",
+                "page_idx": 0,
+                "block_type": "text",
+                "block_kind": "text",
+                "layout_role": "paragraph",
+                "semantic_role": "body",
+                "structure_role": "body",
+                "bbox": [10.0, 20.0, 180.0, 90.0],
+                "lines": [{"bbox": [10.0, 20.0, 180.0, 32.0], "spans": [{"type": "text", "content": "source"}]}],
+                "source_text": "A body paragraph that should align on both sides.",
+                "protected_source_text": "A body paragraph that should align on both sides.",
+                "protected_translated_text": "这是一段需要左右两侧对齐的正文内容，用于确认 Typst 段落参数已经打开。",
+            }
+        ],
+    )
+
+    assert "justify: true" in source
+
+
+def test_typst_overlay_does_not_justify_title_markdown_blocks() -> None:
+    source = build_typst_overlay_source(
+        200.0,
+        300.0,
+        [
+            {
+                "item_id": "p001-title",
+                "page_idx": 0,
+                "block_type": "text",
+                "block_kind": "text",
+                "layout_role": "heading",
+                "structure_role": "heading",
+                "bbox": [10.0, 20.0, 180.0, 50.0],
+                "lines": [{"bbox": [10.0, 20.0, 180.0, 32.0], "spans": [{"type": "text", "content": "Title"}]}],
+                "source_text": "Related work",
+                "protected_source_text": "Related work",
+                "protected_translated_text": "相关工作",
+            }
+        ],
+    )
+
+    assert "justify: true" not in source
 
 
 def test_typst_overlay_defaults_to_transparent_text_blocks() -> None:
@@ -700,6 +862,7 @@ def test_typst_overlay_text_blocks_use_fit_without_clipping() -> None:
     assert "pdftr_fit_markdown" in source
     assert "emergency_min_size = calc.max(4.2pt" in source
     assert "emergency_min_leading = calc.max(0.20em" in source
+    assert "pdftr_fit_leading" in source
 
 
 def test_dense_body_pressure_tightening_does_not_increase_leading() -> None:
@@ -735,6 +898,204 @@ def test_dense_body_pressure_tightening_does_not_increase_leading() -> None:
 
     assert payload["leading_em"] <= baseline_leading
     assert payload["prefer_typst_fit"] is True
+
+
+def test_normal_body_leading_recovers_when_vertical_slack_exists() -> None:
+    payload = {
+        "inner_bbox": [10.0, 10.0, 250.0, 145.0],
+        "translated_text": "这是一个普通正文段落，内容不算拥挤，应该保持比较舒适的行距。",
+        "formula_map": [],
+        "font_size_pt": 10.4,
+        "leading_em": 0.52,
+        "dense_small_box": False,
+        "heavy_dense_small_box": False,
+        "is_body": True,
+        "render_kind": "markdown",
+        "prefer_typst_fit": False,
+        "item": {"source_text": "normal body text with enough words for smoothing"},
+    }
+
+    apply_body_payload_pipeline([payload], page_text_width_med=180.0)
+
+    assert payload["leading_em"] >= 0.56
+
+
+def test_normal_body_leading_uses_more_slack_when_available() -> None:
+    payload = {
+        "inner_bbox": [10.0, 10.0, 300.0, 220.0],
+        "translated_text": "这是一个普通正文段落，页面给了很多垂直空间，所以行距应该更接近舒展的正文排版。",
+        "formula_map": [],
+        "font_size_pt": 10.4,
+        "leading_em": 0.52,
+        "dense_small_box": False,
+        "heavy_dense_small_box": False,
+        "is_body": True,
+        "render_kind": "markdown",
+        "prefer_typst_fit": False,
+        "item": {
+            "source_text": "normal body text with loose source leading",
+            "lines": [
+                {"bbox": [10.0, 10.0, 290.0, 22.0]},
+                {"bbox": [10.0, 28.0, 290.0, 40.0]},
+                {"bbox": [10.0, 46.0, 290.0, 58.0]},
+            ],
+            "bbox": [10.0, 10.0, 300.0, 70.0],
+        },
+    }
+
+    apply_body_payload_pipeline([payload], page_text_width_med=180.0)
+
+    assert payload["leading_em"] >= 0.66
+
+
+def test_normal_body_leading_stays_bounded_when_height_is_tight() -> None:
+    payload = {
+        "inner_bbox": [10.0, 10.0, 145.0, 54.0],
+        "translated_text": "这是一个较紧的普通正文段落，行距可以恢复但不能撑出框。" * 2,
+        "formula_map": [],
+        "font_size_pt": 10.4,
+        "leading_em": 0.52,
+        "dense_small_box": False,
+        "heavy_dense_small_box": False,
+        "is_body": True,
+        "render_kind": "markdown",
+        "prefer_typst_fit": False,
+        "item": {"source_text": "normal body text with constrained height"},
+    }
+
+    apply_body_payload_pipeline([payload], page_text_width_med=120.0)
+
+    assert payload["leading_em"] < 0.62
+
+
+def test_normal_body_leading_spends_available_line_space() -> None:
+    payload = {
+        "inner_bbox": [10.0, 10.0, 230.0, 86.0],
+        "translated_text": "这是一个两三行的普通正文段落，应该根据框高把行距拉开一些。",
+        "formula_map": [],
+        "font_size_pt": 10.4,
+        "leading_em": 0.52,
+        "dense_small_box": False,
+        "heavy_dense_small_box": False,
+        "is_body": True,
+        "render_kind": "markdown",
+        "prefer_typst_fit": False,
+        "item": {"source_text": "normal body text with enough geometry"},
+    }
+
+    apply_body_payload_pipeline([payload], page_text_width_med=160.0)
+
+    assert payload["leading_em"] >= 0.64
+
+
+def test_long_normal_body_leading_can_use_high_dynamic_cap() -> None:
+    payload = {
+        "inner_bbox": [10.0, 10.0, 250.0, 245.0],
+        "translated_text": "这是一个普通的大段正文，应该在不溢出的前提下使用更多垂直空间，而不是长期停留在保守行距。" * 8,
+        "formula_map": [],
+        "font_size_pt": 9.7,
+        "leading_em": 0.52,
+        "dense_small_box": False,
+        "heavy_dense_small_box": False,
+        "is_body": True,
+        "render_kind": "markdown",
+        "prefer_typst_fit": False,
+        "item": {"source_text": "long normal body text with generous paragraph box"},
+    }
+
+    apply_body_payload_pipeline([payload], page_text_width_med=180.0)
+
+    assert payload["leading_em"] >= 0.68
+
+
+def test_source_line_rich_body_grows_font_before_expanding_chinese_leading() -> None:
+    payload = {
+        "inner_bbox": [10.0, 10.0, 485.0, 223.0],
+        "translated_text": "这是一个中文译文只需要六行左右的段落，但是英文原文有很多行，因此中文行距需要明显放大来匹配原始框高。" * 3,
+        "formula_map": [],
+        "font_size_pt": 10.3,
+        "leading_em": 0.56,
+        "dense_small_box": False,
+        "heavy_dense_small_box": False,
+        "is_body": True,
+        "render_kind": "markdown",
+        "prefer_typst_fit": False,
+        "item": {
+            "source_text": "source line rich paragraph",
+            "bbox": [10.0, 10.0, 485.0, 223.0],
+            "lines": [
+                {"bbox": [10.0, 10.0 + index * 11.8, 485.0, 20.0 + index * 11.8]}
+                for index in range(18)
+            ],
+        },
+    }
+
+    apply_body_payload_pipeline([payload], page_text_width_med=420.0)
+
+    assert payload["font_size_pt"] > 10.7
+    assert payload["leading_em"] <= 1.38
+
+
+def test_extreme_source_line_underfill_can_expand_body_leading_after_font_growth() -> None:
+    payload = {
+        "inner_bbox": [10.0, 10.0, 285.0, 232.0],
+        "translated_text": "这是一个中文译文明显少于英文原文行数的段落，需要用更大的行距填充原始宽松版面。" * 2,
+        "formula_map": [],
+        "font_size_pt": 10.4,
+        "leading_em": 0.56,
+        "dense_small_box": False,
+        "heavy_dense_small_box": False,
+        "is_body": True,
+        "render_kind": "markdown",
+        "prefer_typst_fit": False,
+        "item": {
+            "source_text": "extremely loose source line rich paragraph",
+            "bbox": [10.0, 10.0, 285.0, 232.0],
+            "lines": [
+                {"bbox": [10.0, 10.0 + index * 13.0, 285.0, 20.0 + index * 13.0]}
+                for index in range(17)
+            ],
+        },
+    }
+
+    apply_body_payload_pipeline([payload], page_text_width_med=240.0)
+
+    assert payload["font_size_pt"] > 10.8
+    assert payload["leading_em"] >= 0.9
+
+
+def test_source_line_rich_body_font_growth_survives_adjacent_smoothing() -> None:
+    def make_payload(y0: float, y1: float) -> dict:
+        return {
+            "inner_bbox": [10.0, y0, 485.0, y1],
+            "translated_text": "这是一个中文译文只需要六行左右的段落，但是英文原文有很多行，因此中文行距需要明显放大来匹配原始框高。" * 3,
+            "formula_map": [],
+            "font_size_pt": 10.3,
+            "leading_em": 0.56,
+            "dense_small_box": False,
+            "heavy_dense_small_box": False,
+            "is_body": True,
+            "render_kind": "markdown",
+            "prefer_typst_fit": False,
+            "item": {
+                "source_text": "source line rich paragraph with enough words for adjacent smoothing",
+                "bbox": [10.0, y0, 485.0, y1],
+                "lines": [
+                    {"bbox": [10.0, y0 + index * 11.8, 485.0, y0 + 10.0 + index * 11.8]}
+                    for index in range(18)
+                ],
+            },
+        }
+
+    first = make_payload(10.0, 223.0)
+    second = make_payload(240.0, 453.0)
+
+    apply_body_payload_pipeline([first, second], page_text_width_med=420.0)
+
+    assert first["font_size_pt"] > 10.7
+    assert second["font_size_pt"] > 10.7
+    assert first["leading_em"] <= 1.38
+    assert second["leading_em"] <= 1.38
 
 
 def test_build_render_page_specs_restores_leaked_formula_tokens_before_render() -> None:
@@ -960,6 +1321,140 @@ def test_build_render_blocks_binary_fits_long_translated_title_to_box() -> None:
     assert title.fit_min_font_size_pt < title.font_size_pt
     assert title.fit_target_width_pt == 160.0
     assert title.fit_target_height_pt == 28.0
+
+
+def test_build_render_blocks_insets_tight_body_vertical_gap() -> None:
+    items = [
+        {
+            "item_id": "p001-b001",
+            "page_idx": 0,
+            "block_type": "text",
+            "block_kind": "text",
+            "layout_role": "paragraph",
+            "semantic_role": "body",
+            "bbox": [20.0, 40.0, 220.0, 92.0],
+            "lines": [{"text": "raw"}],
+            "source_text": "This body paragraph has enough source text to be treated as body text.",
+            "protected_source_text": "This body paragraph has enough source text to be treated as body text.",
+            "protected_translated_text": "这是一段正文内容，用于确认 OCR 框上下贴得很近时可以获得一点有效高度余量。",
+        },
+        {
+            "item_id": "p001-b002",
+            "page_idx": 0,
+            "block_type": "text",
+            "block_kind": "text",
+            "layout_role": "paragraph",
+            "semantic_role": "body",
+            "bbox": [20.0, 92.8, 220.0, 145.0],
+            "lines": [{"text": "raw"}],
+            "source_text": "This second body paragraph is in the same column and follows very closely.",
+            "protected_source_text": "This second body paragraph is in the same column and follows very closely.",
+            "protected_translated_text": "这是同一栏的下一段正文，用来给上一段提供安全边界。",
+        },
+    ]
+
+    blocks = build_render_blocks(items, page_width=260.0, page_height=320.0)
+
+    upper, lower = blocks
+    assert upper.inner_bbox[1] > 40.0
+    assert upper.inner_bbox[3] < 92.0
+    assert (92.0 - 40.0) - (upper.inner_bbox[3] - upper.inner_bbox[1]) <= (92.0 - 40.0) * 0.03
+    assert upper.cover_bbox[0] < 20.0
+    assert upper.cover_bbox[1] < 40.0
+    assert upper.cover_bbox[2] > 220.0
+    assert upper.cover_bbox[3] > 92.0
+
+
+def test_build_render_blocks_expands_title_width_toward_body_column() -> None:
+    items = [
+        {
+            "item_id": "p001-title",
+            "page_idx": 0,
+            "block_type": "text",
+            "block_kind": "text",
+            "layout_role": "heading",
+            "structure_role": "heading",
+            "bbox": [24.0, 24.0, 150.0, 48.0],
+            "lines": [{"text": "Related work"}],
+            "source_text": "Related work",
+            "protected_source_text": "Related work",
+            "protected_translated_text": "相关工作和方法",
+        },
+        {
+            "item_id": "p001-b001",
+            "page_idx": 0,
+            "block_type": "text",
+            "block_kind": "text",
+            "layout_role": "paragraph",
+            "semantic_role": "body",
+            "bbox": [22.0, 60.0, 224.0, 128.0],
+            "lines": [{"text": "raw"}],
+            "source_text": "This body paragraph has enough source text to be treated as body text.",
+            "protected_source_text": "This body paragraph has enough source text to be treated as body text.",
+            "protected_translated_text": "这是标题下方的正文段落，用于给标题提供同栏宽度参考。",
+        },
+    ]
+
+    blocks = build_render_blocks(items, page_width=260.0, page_height=320.0)
+
+    title = blocks[0]
+    assert title.inner_bbox[2] > 150.0
+    assert title.fit_target_width_pt == title.inner_bbox[2] - title.inner_bbox[0]
+    assert title.cover_bbox == [23.0, 23.0, 151.0, 49.0]
+
+
+def test_build_render_blocks_expands_body_cover_bbox_slightly() -> None:
+    items = [
+        {
+            "item_id": "p001-b001",
+            "page_idx": 0,
+            "block_type": "text",
+            "block_kind": "text",
+            "layout_role": "paragraph",
+            "semantic_role": "body",
+            "bbox": [20.0, 40.0, 220.0, 140.0],
+            "lines": [{"text": "raw"}],
+            "source_text": "This body paragraph has enough source text to be treated as body text.",
+            "protected_source_text": "This body paragraph has enough source text to be treated as body text.",
+            "protected_translated_text": "这是一段正文内容，用于确认背景遮盖区域会轻微扩张以防止原文边缘漏出。",
+        },
+    ]
+
+    blocks = build_render_blocks(items, page_width=260.0, page_height=320.0)
+
+    cover = blocks[0].cover_bbox
+    assert cover[0] < 20.0
+    assert cover[1] < 40.0
+    assert cover[2] > 220.0
+    assert cover[3] > 140.0
+    assert cover[0] >= 17.0
+    assert cover[3] <= 143.0
+
+
+def test_build_render_blocks_uses_conservative_cover_y_near_inline_formula() -> None:
+    items = [
+        {
+            "item_id": "p001-b001",
+            "page_idx": 0,
+            "block_type": "text",
+            "block_kind": "text",
+            "layout_role": "paragraph",
+            "semantic_role": "body",
+            "bbox": [20.0, 40.0, 220.0, 140.0],
+            "lines": [{"text": "raw"}],
+            "source_text": r"This paragraph contains $\frac{a}{b}$ inline math.",
+            "protected_source_text": r"This paragraph contains $\frac{a}{b}$ inline math.",
+            "protected_translated_text": r"这段正文包含 $\\frac{a}{b}$ 行内公式。",
+        },
+    ]
+
+    blocks = build_render_blocks(items, page_width=260.0, page_height=320.0)
+
+    cover = blocks[0].cover_bbox
+    assert 39.5 < cover[1] < 40.0
+    assert 140.0 < cover[3] < 140.5
+    assert cover[0] < 20.0
+    assert cover[2] > 220.0
 
 
 def test_typst_overlay_source_uses_title_single_line_fit_when_title_fits_one_line() -> None:
@@ -1433,7 +1928,44 @@ def test_bbox_text_strip_removes_text_inside_bbox_without_redaction_bloat() -> N
         assert "outside text" in text
 
 
-def test_bbox_text_strip_skips_formula_blocks() -> None:
+def test_bbox_text_strip_accepts_untranslated_template_source_text() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        source_pdf = root / "source.pdf"
+        output_pdf = root / "stripped.pdf"
+        doc = fitz.open()
+        page = doc.new_page(width=200, height=200)
+        page.insert_text((20, 40), "inside source", fontsize=12)
+        page.insert_text((20, 140), "outside source", fontsize=12)
+        doc.save(source_pdf)
+        doc.close()
+
+        result = build_bbox_text_stripped_pdf_copy(
+            source_pdf_path=source_pdf,
+            output_pdf_path=output_pdf,
+            translated_pages={
+                0: [
+                    {
+                        "block_kind": "text",
+                        "bbox": [10.0, 20.0, 140.0, 55.0],
+                        "protected_source_text": "inside source",
+                        "protected_translated_text": "",
+                    }
+                ]
+            },
+        )
+
+        assert result.changed is True
+        stripped = fitz.open(output_pdf)
+        try:
+            text = stripped[0].get_text()
+        finally:
+            stripped.close()
+        assert "inside source" not in text
+        assert "outside source" in text
+
+
+def test_bbox_text_strip_skips_pages_with_formula_blocks() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         source_pdf = root / "source.pdf"
@@ -1464,12 +1996,6 @@ def test_bbox_text_strip_skips_formula_blocks() -> None:
             },
         )
 
-        assert result.changed is True
-
-        stripped = fitz.open(output_pdf)
-        try:
-            text = stripped[0].get_text()
-        finally:
-            stripped.close()
-        assert "body text" not in text
-        assert "I/I0 = A1 + A2" in text
+        assert result.changed is False
+        assert output_pdf.exists() is False
+        assert result.skipped_complex_page_indices == frozenset({0})

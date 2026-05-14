@@ -140,6 +140,20 @@ def test_render_markdown_uses_direct_typst_path_for_item() -> None:
     assert markdown == r"积分 $\int f(x) dx$ 值"
 
 
+def test_direct_typst_render_markdown_normalizes_latex_cite_commands() -> None:
+    item = {"math_mode": "direct_typst"}
+    markdown = build_item_render_markdown(
+        item,
+        r"ACONF\cite{124}、PCONF21\cite{117,126,127} 和 GMTKN55 \citep{117}",
+        [],
+    )
+    assert r"\cite" not in markdown
+    assert r"\citep" not in markdown
+    assert "ACONF¹²⁴" in markdown
+    assert "PCONF21¹¹⁷,¹²⁶,¹²⁷" in markdown
+    assert "GMTKN55 ¹¹⁷" in markdown
+
+
 def test_render_markdown_uses_formula_map_for_placeholder_mode() -> None:
     formula_map = [{"placeholder": "<f1-17a/>", "formula_text": r"\pi"}]
     markdown = build_render_markdown("你好<f1-17a/>，下一步", formula_map, math_mode="placeholder")
@@ -172,6 +186,16 @@ def test_typst_markdown_direct_typst_conservative_mode_keeps_raw_latex_text() ->
     assert r"$\mathrm" not in markdown
     assert r"\left[ NTf _ { 2 } \right]" in markdown
     assert "Co(IV)" in markdown
+
+
+def test_typst_markdown_direct_text_normalizes_latex_cite_before_math_promotion() -> None:
+    markdown = build_markdown_from_direct_text(
+        r"集合 ACONF\cite{124} 和 PCONF21\cite{117,126,127}。",
+    )
+    assert r"\cite" not in markdown
+    assert "$\\cite" not in markdown
+    assert "ACONF¹²⁴" in markdown
+    assert "PCONF21¹¹⁷,¹²⁶,¹²⁷" in markdown
 
 
 def test_typst_markdown_direct_typst_keeps_existing_inline_math_latex() -> None:
@@ -256,6 +280,11 @@ def test_direct_typst_passthrough_rewrites_mathscr_for_mitex_compatibility() -> 
 def test_direct_typst_sanitizer_keeps_only_inline_math_compat_cleanup() -> None:
     markdown = sanitize_direct_typst_inline_math(r"正文 $\mathscr{P}$ 与 $\angleABC$ 保持")
     assert markdown == r"正文 $\mathcal{P}$ 与 $\angle ABC$ 保持"
+
+
+def test_direct_typst_sanitizer_normalizes_double_backslash_math_commands() -> None:
+    markdown = sanitize_direct_typst_inline_math(r"浓度 $2.5~\\mu\\text{g}~\\text{ml}^{-1}$ 保持")
+    assert markdown == r"浓度 $2.5~\mu\text{g}~\text{ml}^{-1}$ 保持"
 
 
 def test_direct_typst_boundary_module_matches_legacy_passthrough_behavior() -> None:

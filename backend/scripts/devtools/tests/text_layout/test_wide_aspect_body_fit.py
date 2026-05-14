@@ -8,10 +8,13 @@ sys.path.insert(0, str(REPO_SCRIPTS_ROOT))
 
 from services.rendering.layout.font_fit import estimate_font_size_pt
 from services.rendering.layout.font_fit import estimate_leading_em
+from services.rendering.layout.font_fit import is_body_text_candidate
 from services.rendering.layout.font_fit import local_font_size_pt
 from services.rendering.layout.font_fit import normalize_leading_em_for_font_size
 from services.rendering.layout.font_fit import BODY_LEADING_MAX
 from services.rendering.layout.font_fit import BODY_LEADING_MIN
+from services.rendering.layout.payload.block_seed_body_policy import is_dense_small_box
+from services.rendering.layout.payload.block_seed_body_policy import is_heavy_dense_small_box
 from services.rendering.layout.payload.blocks import build_render_blocks
 from services.rendering.layout.payload.block_seed import _relax_wide_aspect_body_leading
 from services.rendering.layout.payload.fit import fit_translated_block_metrics
@@ -123,6 +126,38 @@ class WideAspectBodyFitTests(unittest.TestCase):
         self.assertLessEqual(caption_font, 9.8)
         self.assertLess(caption_font, body_font - 0.5)
 
+    def test_vision_footnote_font_is_annotation_sized(self):
+        body = _sample_item(wide_aspect=False)
+        footnote = {
+            "block_type": "text",
+            "block_kind": "text",
+            "raw_block_type": "vision_footnote",
+            "layout_role": "footnote",
+            "semantic_role": "unknown",
+            "structure_role": "footnote",
+            "normalized_sub_type": "footnote",
+            "tags": ["footnote"],
+            "source_text": "a P < 0.05; b adjusted confidence interval.",
+            "bbox": [58.0, 720.0, 520.0, 742.0],
+            "lines": [
+                {
+                    "bbox": [58.0, 720.0, 520.0, 731.0],
+                    "spans": [{"type": "text", "content": "a P < 0.05; b adjusted confidence interval."}],
+                }
+            ],
+        }
+        page_font_size = 10.8
+        page_line_pitch = 14.0
+        page_line_height = 12.0
+        density_baseline = 28.0
+
+        body_font = estimate_font_size_pt(body, page_font_size, page_line_pitch, page_line_height, density_baseline)
+        footnote_font = estimate_font_size_pt(footnote, page_font_size, page_line_pitch, page_line_height, density_baseline)
+
+        self.assertLessEqual(footnote_font, 8.8)
+        self.assertLess(footnote_font, body_font - 1.0)
+        self.assertFalse(is_body_text_candidate(footnote, page_text_width_med=300.0))
+
     def test_source_visual_line_count_uses_observed_ocr_lines_not_text_length(self):
         item = {
             "block_type": "text",
@@ -218,7 +253,253 @@ class WideAspectBodyFitTests(unittest.TestCase):
         narrow_block = next(block for block in blocks if block.block_id == "item-2")
 
         self.assertEqual(narrow_block.inner_bbox, items[2]["bbox"])
-        self.assertEqual(narrow_block.cover_bbox, [40, 240, 250, 255])
+        self.assertLess(narrow_block.cover_bbox[0], 40)
+        self.assertLess(narrow_block.cover_bbox[1], 240)
+        self.assertGreater(narrow_block.cover_bbox[2], 250)
+        self.assertGreater(narrow_block.cover_bbox[3], 255)
+
+    def test_short_body_line_inherits_same_column_font_floor(self):
+        items = [
+            {
+                "item_id": "body-anchor-1",
+                "block_type": "text",
+                "source_text": "A normal body paragraph establishes the same-column font.",
+                "bbox": [44, 100, 382, 150],
+                "lines": [
+                    {"bbox": [44, 100, 380, 112], "spans": [{"type": "text", "content": "A normal body paragraph"}]},
+                    {"bbox": [44, 116, 380, 128], "spans": [{"type": "text", "content": "establishes the same-column font."}]},
+                ],
+                "protected_translated_text": "这是一个普通正文段落，用来建立本栏的正文字号。",
+            },
+            {
+                "item_id": "body-anchor-2",
+                "block_type": "text",
+                "source_text": "Another normal paragraph in the same column.",
+                "bbox": [44, 170, 382, 220],
+                "lines": [
+                    {"bbox": [44, 170, 380, 182], "spans": [{"type": "text", "content": "Another normal paragraph"}]},
+                    {"bbox": [44, 186, 380, 198], "spans": [{"type": "text", "content": "in the same column."}]},
+                ],
+                "protected_translated_text": "这是同一栏里的另一个普通正文段落。",
+            },
+            {
+                "item_id": "body-anchor-3",
+                "block_type": "text",
+                "source_text": "A third paragraph makes the column signal stable.",
+                "bbox": [44, 240, 382, 290],
+                "lines": [
+                    {"bbox": [44, 240, 380, 252], "spans": [{"type": "text", "content": "A third paragraph"}]},
+                    {"bbox": [44, 256, 380, 268], "spans": [{"type": "text", "content": "makes the signal stable."}]},
+                ],
+                "protected_translated_text": "第三个段落让同栏正文字号信号更加稳定。",
+            },
+            {
+                "item_id": "short-body-line",
+                "block_type": "text",
+                "source_text": "Remember that we are still dealing with spin-orbitals.",
+                "bbox": [44, 320, 288, 332],
+                "lines": [
+                    {
+                        "bbox": [44, 320, 288, 332],
+                        "spans": [{"type": "text", "content": "Remember that we are still dealing with spin-orbitals."}],
+                    }
+                ],
+                "protected_translated_text": "请记住仍在处理自旋轨道。",
+            },
+            {
+                "item_id": "next-tight-line",
+                "block_type": "text",
+                "source_text": "A following line sits close enough to trigger collision fit.",
+                "bbox": [44, 333, 382, 345],
+                "lines": [
+                    {
+                        "bbox": [44, 333, 382, 345],
+                        "spans": [{"type": "text", "content": "A following line sits close."}],
+                    }
+                ],
+                "protected_translated_text": "下一行很近，会触发相邻碰撞压缩。",
+            },
+        ]
+
+        blocks = build_render_blocks(items, page_width=430.0, page_height=655.0)
+        short_block = next(block for block in blocks if block.source_item_id == "short-body-line")
+        anchor_fonts = [
+            block.font_size_pt
+            for block in blocks
+            if block.source_item_id in {"body-anchor-1", "body-anchor-2", "body-anchor-3"}
+        ]
+
+        self.assertGreaterEqual(short_block.font_size_pt, min(anchor_fonts) - 0.9)
+        self.assertGreaterEqual(short_block.fit_min_font_size_pt, min(anchor_fonts) - 1.1)
+
+    def test_similar_body_fonts_unify_before_underfill_growth(self):
+        items = [
+            {
+                "item_id": "body-1",
+                "block_type": "text",
+                "source_text": "Normal body paragraph one establishes the first paragraph in the same column.",
+                "bbox": [44, 100, 382, 150],
+                "lines": [
+                    {"bbox": [44, 100, 380, 112], "spans": [{"type": "text", "content": "Normal body paragraph one"}]},
+                    {"bbox": [44, 116, 380, 128], "spans": [{"type": "text", "content": "establishes the first paragraph."}]},
+                ],
+                "protected_translated_text": "这是同一栏中的第一段正文。",
+            },
+            {
+                "item_id": "body-2",
+                "block_type": "text",
+                "source_text": "Normal body paragraph two with similar size.",
+                "bbox": [44, 170, 382, 222],
+                "lines": [
+                    {"bbox": [44, 170, 380, 183], "spans": [{"type": "text", "content": "Normal body paragraph two."}]},
+                    {"bbox": [44, 186, 380, 199], "spans": [{"type": "text", "content": "with similar size."}]},
+                ],
+                "protected_translated_text": "这是第二段正文，字号应当与第一段统一。",
+            },
+            {
+                "item_id": "body-3",
+                "block_type": "text",
+                "source_text": "Normal body paragraph three with similar size.",
+                "bbox": [44, 242, 382, 294],
+                "lines": [
+                    {"bbox": [44, 242, 380, 256], "spans": [{"type": "text", "content": "Normal body paragraph three."}]},
+                    {"bbox": [44, 259, 380, 273], "spans": [{"type": "text", "content": "with similar size."}]},
+                ],
+                "protected_translated_text": "这是第三段正文，字号也应当统一。",
+            },
+        ]
+
+        blocks = build_render_blocks(items, page_width=430.0, page_height=655.0)
+        fonts = [block.font_size_pt for block in blocks]
+
+        self.assertLess(max(fonts) / min(fonts), 1.06)
+        self.assertGreater(max(fonts), min(fonts))
+
+    def test_low_height_body_inherits_tall_same_column_font(self):
+        items = [
+            {
+                "item_id": "tall-body-1",
+                "block_type": "text",
+                "source_text": "A tall paragraph establishes the same-column font.",
+                "bbox": [44, 80, 382, 150],
+                "lines": [
+                    {"bbox": [44, 80, 380, 94], "spans": [{"type": "text", "content": "A tall paragraph establishes"}]},
+                    {"bbox": [44, 100, 380, 114], "spans": [{"type": "text", "content": "the same-column font."}]},
+                ],
+                "protected_translated_text": "这是一个较高的正文段落，用来建立同栏正文字号。",
+            },
+            {
+                "item_id": "low-body",
+                "block_type": "text",
+                "source_text": "A lower-height paragraph in the same body column should not stay tiny.",
+                "bbox": [44, 170, 382, 202],
+                "lines": [
+                    {"bbox": [44, 170, 380, 183], "spans": [{"type": "text", "content": "A lower-height paragraph"}]},
+                    {"bbox": [44, 187, 380, 200], "spans": [{"type": "text", "content": "in the same body column."}]},
+                ],
+                "protected_translated_text": "这是同栏中高度较低的正文段落，字号应当向较高正文框看齐。",
+            },
+            {
+                "item_id": "tall-body-2",
+                "block_type": "text",
+                "source_text": "Another tall paragraph stabilizes the same-column font.",
+                "bbox": [44, 230, 382, 302],
+                "lines": [
+                    {"bbox": [44, 230, 380, 244], "spans": [{"type": "text", "content": "Another tall paragraph"}]},
+                    {"bbox": [44, 250, 380, 264], "spans": [{"type": "text", "content": "stabilizes the same-column font."}]},
+                ],
+                "protected_translated_text": "另一个较高的正文段落让同栏字号信号更稳定。",
+            },
+        ]
+
+        blocks = build_render_blocks(items, page_width=430.0, page_height=655.0)
+        low_block = next(block for block in blocks if block.source_item_id == "low-body")
+        tall_fonts = [
+            block.font_size_pt
+            for block in blocks
+            if block.source_item_id in {"tall-body-1", "tall-body-2"}
+        ]
+
+        self.assertGreaterEqual(low_block.font_size_pt, min(tall_fonts) - 0.35)
+
+    def test_dense_small_box_requires_geometry_density(self):
+        self.assertFalse(
+            is_dense_small_box(
+                density_ratio=1.4,
+                layout_density=0.55,
+                page_box_area_ratio=0.03,
+            )
+        )
+        self.assertFalse(
+            is_heavy_dense_small_box(
+                density_ratio=1.4,
+                layout_density=0.55,
+                page_box_area_ratio=0.03,
+                heavy_compact_ratio=1.0,
+            )
+        )
+
+    def test_dense_small_box_uses_geometry_as_primary_signal(self):
+        self.assertTrue(
+            is_dense_small_box(
+                density_ratio=0.5,
+                layout_density=0.9,
+                page_box_area_ratio=0.03,
+            )
+        )
+        self.assertTrue(
+            is_heavy_dense_small_box(
+                density_ratio=0.5,
+                layout_density=1.02,
+                page_box_area_ratio=0.03,
+                heavy_compact_ratio=1.0,
+            )
+        )
+
+    def test_short_body_context_height_can_relax_fit_budget(self):
+        items = [
+            {
+                "item_id": "body-anchor-1",
+                "block_type": "text",
+                "source_text": "A normal paragraph establishes column body geometry.",
+                "bbox": [44, 100, 382, 150],
+                "lines": [
+                    {"bbox": [44, 100, 380, 112], "spans": [{"type": "text", "content": "A normal paragraph"}]},
+                    {"bbox": [44, 116, 380, 128], "spans": [{"type": "text", "content": "establishes geometry."}]},
+                ],
+                "protected_translated_text": "这是一个普通正文段落，用来建立同栏正文几何。",
+            },
+            {
+                "item_id": "body-anchor-2",
+                "block_type": "text",
+                "source_text": "Another normal paragraph establishes column body geometry.",
+                "bbox": [44, 170, 382, 222],
+                "lines": [
+                    {"bbox": [44, 170, 380, 183], "spans": [{"type": "text", "content": "Another normal paragraph"}]},
+                    {"bbox": [44, 186, 380, 199], "spans": [{"type": "text", "content": "establishes geometry."}]},
+                ],
+                "protected_translated_text": "这是另一个普通正文段落，用来建立同栏正文几何。",
+            },
+            {
+                "item_id": "short-body",
+                "block_type": "text",
+                "source_text": "Short OCR bbox should not be a hard height limit.",
+                "bbox": [44, 250, 288, 262],
+                "lines": [
+                    {
+                        "bbox": [44, 250, 288, 262],
+                        "spans": [{"type": "text", "content": "Short OCR bbox should not be a hard height limit."}],
+                    }
+                ],
+                "protected_translated_text": "短 OCR 框不应成为正文高度硬限制。",
+            },
+        ]
+
+        blocks = build_render_blocks(items, page_width=430.0, page_height=655.0)
+        short_block = next(block for block in blocks if block.source_item_id == "short-body")
+
+        self.assertTrue(short_block.fit_to_box)
+        self.assertGreater(short_block.fit_max_height_pt, short_block.inner_bbox[3] - short_block.inner_bbox[1])
 
     def test_wide_aspect_body_preserves_more_ocr_line_pitch_signal(self):
         base_item = _sample_item(wide_aspect=False)
@@ -326,6 +607,50 @@ class WideAspectBodyFitTests(unittest.TestCase):
             0.42,
         )
         self.assertLessEqual(relaxed, 0.46)
+
+    def test_underfilled_body_uses_font_growth_before_loose_leading(self):
+        items = [
+            {
+                "item_id": "body-anchor",
+                "block_type": "text",
+                "source_text": "A normal paragraph establishes body size.",
+                "bbox": [44, 80, 382, 132],
+                "lines": [
+                    {"bbox": [44, 80, 380, 93], "spans": [{"type": "text", "content": "A normal paragraph"}]},
+                    {"bbox": [44, 96, 380, 109], "spans": [{"type": "text", "content": "establishes body size."}]},
+                ],
+                "protected_translated_text": "这是一个普通正文段落，用来建立正文字号。",
+            },
+            {
+                "item_id": "underfilled",
+                "block_type": "text",
+                "source_text": "A short translated body paragraph has ample vertical room.",
+                "bbox": [44, 160, 382, 250],
+                "lines": [
+                    {"bbox": [44, 160, 380, 173], "spans": [{"type": "text", "content": "A short translated body paragraph"}]},
+                    {"bbox": [44, 176, 380, 189], "spans": [{"type": "text", "content": "has ample vertical room."}]},
+                ],
+                "protected_translated_text": "这是较短的正文。",
+            },
+            {
+                "item_id": "body-anchor-2",
+                "block_type": "text",
+                "source_text": "Another normal paragraph establishes body size.",
+                "bbox": [44, 280, 382, 332],
+                "lines": [
+                    {"bbox": [44, 280, 380, 293], "spans": [{"type": "text", "content": "Another normal paragraph"}]},
+                    {"bbox": [44, 296, 380, 309], "spans": [{"type": "text", "content": "establishes body size."}]},
+                ],
+                "protected_translated_text": "这是另一个普通正文段落，用来建立正文字号。",
+            },
+        ]
+
+        blocks = build_render_blocks(items, page_width=430.0, page_height=655.0)
+        underfilled = next(block for block in blocks if block.source_item_id == "underfilled")
+        anchors = [block for block in blocks if block.source_item_id in {"body-anchor", "body-anchor-2"}]
+
+        self.assertGreaterEqual(underfilled.font_size_pt, min(block.font_size_pt for block in anchors) - 0.2)
+        self.assertLessEqual(underfilled.leading_em, 0.68)
 
 
 if __name__ == "__main__":

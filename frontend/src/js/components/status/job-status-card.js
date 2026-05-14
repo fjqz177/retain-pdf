@@ -3,6 +3,7 @@ import {
   OCR_ANIMATION_PATH,
   RENDER_ANIMATION_PATH,
   STAGE_ANIMATIONS,
+  STAGE_FLOW,
   STAGE_LABELS,
   TRANSLATION_ANIMATION_PATH,
   UPLOAD_ANIMATION_PATH,
@@ -18,7 +19,10 @@ import {
   setProgress,
   syncPrimaryActions,
 } from "./job-status-card-rendering.js";
-import { resolveSelectedStage, syncStageFlow } from "./job-status-card-stage-flow.js";
+import {
+  resolveSelectedStage,
+  syncStageFlow,
+} from "./job-status-card-stage-flow.js";
 import { syncTranslationSubstageStates } from "./job-status-card-substages.js";
 import { jobStatusCardTemplate } from "./job-status-card-template.js";
 
@@ -87,6 +91,15 @@ class JobStatusCard extends HTMLElement {
     }
   }
 
+  #effectiveFlowStageKey(snapshot = this.#lastSnapshot) {
+    const stageKey = `${snapshot?.stageKey || ""}`.trim();
+    if (STAGE_FLOW.includes(stageKey)) {
+      return stageKey;
+    }
+    const progressByKey = snapshot?.stageProgressByKey || {};
+    return [...STAGE_FLOW].reverse().find((key) => progressByKey[key]) || "";
+  }
+
   setStageFlow(stageKey = "", selectedStageKey = "") {
     syncStageFlow(this, stageKey, selectedStageKey);
   }
@@ -125,7 +138,9 @@ class JobStatusCard extends HTMLElement {
     progressFallbackText = "-",
     progressPercent = NaN,
     progressText = "",
+    progressIndeterminate = false,
     visualStageKey = "",
+    stageProgressByKey = {},
     pdfReady = false,
     readerReady = false,
     cancelEnabled = false,
@@ -141,7 +156,9 @@ class JobStatusCard extends HTMLElement {
       progressFallbackText,
       progressPercent,
       progressText,
+      progressIndeterminate,
       visualStageKey,
+      stageProgressByKey,
       pdfReady,
       readerReady,
       cancelEnabled,
@@ -159,25 +176,42 @@ class JobStatusCard extends HTMLElement {
     if (!snapshot) {
       return;
     }
-    const selected = this.#selectedStageKey || snapshot.stageKey;
-    const selectedIsCurrent = selected === snapshot.stageKey || !selected;
-    this.setStageFlow(snapshot.stageKey, selected);
+    const flowStageKey = this.#effectiveFlowStageKey(snapshot);
+    const selected = this.#selectedStageKey || flowStageKey || snapshot.stageKey;
+    const selectedIsCurrent = selected === snapshot.stageKey || (!this.#selectedStageKey && selected === flowStageKey);
+    this.setStageFlow(flowStageKey || snapshot.stageKey, selected);
     this.#syncTranslationSubstages(selected, selectedIsCurrent);
     this.#stageAnimationController?.setStageVisualMode(resolveVisualStageKeyForSnapshot(snapshot, selected));
     const labelEl = this.querySelector("#status-ring-label");
+    const progressSummaryEl = this.querySelector("#status-stage-progress-summary");
     if (labelEl && !selectedIsCurrent) {
       labelEl.textContent = `${STAGE_LABELS[selected] || "阶段"} 阶段`;
     } else if (labelEl) {
       labelEl.textContent = snapshot.label;
     }
+    const selectedProgress = selectedIsCurrent
+      ? {
+          current: snapshot.progressCurrent,
+          total: snapshot.progressTotal,
+          progressText: snapshot.progressText,
+          indeterminate: snapshot.progressIndeterminate,
+        }
+      : snapshot.stageProgressByKey?.[selected];
+    if (progressSummaryEl) {
+      const summaryText = selectedProgress?.progressText || "";
+      progressSummaryEl.textContent = summaryText;
+      progressSummaryEl.classList.toggle("hidden", !summaryText || selected === "done");
+    }
     this.setProgress({
-      current: snapshot.progressCurrent,
-      total: snapshot.progressTotal,
+      current: selectedProgress?.current,
+      total: selectedProgress?.total,
       fallbackText: snapshot.progressFallbackText,
-      percent: snapshot.progressPercent,
-      progressText: snapshot.progressText,
-      stageKey: snapshot.stageKey,
-      forceVisible: selectedIsCurrent && ["ocr", "translate", "render"].includes(snapshot.stageKey),
+      percent: selectedIsCurrent ? snapshot.progressPercent : NaN,
+      progressText: selectedProgress?.progressText || "",
+      indeterminate: selectedProgress?.indeterminate,
+      stageKey: selected,
+      forceVisible: ["ocr", "translate", "render"].includes(selected)
+        && (selectedIsCurrent || Boolean(selectedProgress)),
     });
     this.syncPrimaryActions({
       pdfReady: selected === "done" && snapshot.pdfReady,

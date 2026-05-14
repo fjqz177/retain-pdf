@@ -5,7 +5,10 @@ import {
   setLinearProgress,
   updateActionButtons,
 } from "./job-ui-actions.js";
-import { resolveDisplayedStagePresentation } from "./job-stage-presentation.js";
+import {
+  collectStageProgressByKey,
+  resolveDisplayedStagePresentation,
+} from "./job-stage-presentation.js";
 import {
   buildStatusDetailSnapshot,
   renderStatusDetailSections,
@@ -48,15 +51,57 @@ function stageRank(stageKey) {
   }[stageKey] ?? 0;
 }
 
-function keepDisplayedStageForward(stageKey) {
+function keepDisplayedStageForward(stageKey, jobId = "") {
+  const normalizedJobId = `${jobId || ""}`.trim();
+  if (state.currentJobDisplayedStageJobId !== normalizedJobId) {
+    state.currentJobDisplayedStageKey = "";
+    state.currentJobDisplayedStageJobId = normalizedJobId;
+  }
   const previous = `${state.currentJobDisplayedStageKey || ""}`.trim();
   const next = `${stageKey || ""}`.trim();
   if (!previous || stageRank(next) >= stageRank(previous)) {
     state.currentJobDisplayedStageKey = next;
-    return next;
+    return {
+      stageKey: next,
+      keptPrevious: false,
+    };
   }
-  return previous;
+  return {
+    stageKey: previous,
+    keptPrevious: true,
+  };
 }
+
+function pinnedStagePresentation(stageKey = "") {
+  switch (stageKey) {
+    case "done":
+      return {
+        label: "完成",
+        detail: "翻译 PDF 已生成",
+      };
+    case "render":
+      return {
+        label: "第 3/4 步 · 渲染",
+        detail: "正在生成翻译后的 PDF",
+      };
+    case "translate":
+      return {
+        label: "第 2/4 步 · 翻译",
+        detail: "正在翻译正文内容",
+      };
+    case "ocr":
+      return {
+        label: "第 1/4 步 · OCR 解析",
+        detail: "正在识别 PDF 内容",
+      };
+    default:
+      return {
+        label: "等待中",
+        detail: "准备中",
+      };
+  }
+}
+
 
 function stopElapsedTicker() {
   if (state.elapsedTimer) {
@@ -168,7 +213,18 @@ export function renderJob(payload, eventsPayload = null, manifestPayload = null)
     job,
     eventsPayload !== null ? eventsPayload : state.currentJobEvents,
   );
-  stagePresentation.stageKey = keepDisplayedStageForward(stagePresentation.stageKey);
+  const displayStage = keepDisplayedStageForward(stagePresentation.stageKey, nextJobId);
+  stagePresentation.stageKey = displayStage.stageKey;
+  if (displayStage.keptPrevious) {
+    const pinned = pinnedStagePresentation(displayStage.stageKey);
+    stagePresentation.visualStageKey = displayStage.stageKey;
+    stagePresentation.label = pinned.label;
+    stagePresentation.detail = pinned.detail;
+    stagePresentation.progressText = "";
+    stagePresentation.progressCurrent = null;
+    stagePresentation.progressTotal = null;
+    stagePresentation.progressIndeterminate = false;
+  }
   state.currentJobStartedAt = resolveElapsedStart(job);
   state.currentJobFinishedAt = (job.finished_at || job.updated_at || "").trim();
   setWorkflowSections(job);
@@ -195,6 +251,11 @@ export function renderJob(payload, eventsPayload = null, manifestPayload = null)
       progressFallbackText: "-",
       progressPercent: job.progress_percent,
       progressText: stagePresentation.progressText,
+      progressIndeterminate: stagePresentation.progressIndeterminate,
+      stageProgressByKey: collectStageProgressByKey(
+        job,
+        eventsPayload !== null ? eventsPayload : state.currentJobEvents,
+      ),
       pdfReady: actions.pdfEnabled && !!actions.pdf && job.status === "succeeded",
       readerReady: readerEnabled && job.status === "succeeded",
       cancelEnabled: actions.cancelEnabled && !!actions.cancel,

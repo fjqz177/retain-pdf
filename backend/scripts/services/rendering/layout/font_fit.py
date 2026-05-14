@@ -9,6 +9,9 @@ from services.rendering.layout.font_size_fit import BODY_PAGE_BLEND_BASE
 from services.rendering.layout.font_size_fit import BODY_PAGE_BLEND_MIN
 from services.rendering.layout.font_size_fit import CAPTION_FONT_SCALE
 from services.rendering.layout.font_size_fit import CAPTION_MAX_FONT_SIZE_PT
+from services.rendering.layout.font_size_fit import FOOTNOTE_FONT_SCALE
+from services.rendering.layout.font_size_fit import FOOTNOTE_MAX_FONT_SIZE_PT
+from services.rendering.layout.font_size_fit import FOOTNOTE_MIN_FONT_SIZE_PT
 from services.rendering.layout.font_size_fit import LOCAL_BLOCK_SCALE_MAX
 from services.rendering.layout.font_size_fit import LOCAL_BLOCK_SCALE_MIN
 from services.rendering.layout.font_size_fit import MAX_FONT_SIZE_PT

@@ -11,6 +11,7 @@ from runtime.pipeline.render_stage import build_book_from_translations
 from runtime.pipeline.render_stage import build_book_pipeline
 from runtime.pipeline.render_stage import run_render_stage
 from runtime.pipeline.translation_stage import translate_book_pipeline
+from services.rendering.source.prewarm import prewarm_manifest_path_from_artifacts_dir
 from services.translation.diagnostics import write_translation_debug_index
 from services.translation.diagnostics import write_translation_diagnostics
 from services.translation.terms import GlossaryEntry
@@ -118,6 +119,10 @@ def run_book_pipeline(
         glossary_overridden_entry_count=glossary_overridden_entry_count,
         glossary_entries=glossary_entries or [],
         invocation=invocation,
+        render_prewarm_output_pdf_path=output_pdf_path,
+        render_prewarm_artifacts_dir=output_dir.parent / ARTIFACTS_DIR_NAME,
+        render_prewarm_mode=render_mode,
+        render_prewarm_pdf_compress_dpi=pdf_compress_dpi,
     )
     translate_elapsed = time.perf_counter() - total_started
     diagnostics_path = output_dir.parent / ARTIFACTS_DIR_NAME / "translation_diagnostics.json"
@@ -168,6 +173,7 @@ def run_book_pipeline(
         base_url=base_url,
         typst_font_family=typst_font_family,
         pdf_compress_dpi=pdf_compress_dpi,
+        render_prewarm_manifest_path=prewarm_manifest_path_from_artifacts_dir(output_dir.parent / ARTIFACTS_DIR_NAME),
     )
     save_elapsed = time.perf_counter() - save_started
     total_elapsed = time.perf_counter() - total_started

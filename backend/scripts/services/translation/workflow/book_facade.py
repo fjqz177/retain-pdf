@@ -133,6 +133,10 @@ class TranslationRequest:
     glossary_overridden_entry_count: int = 0
     glossary_entries: list[GlossaryEntry] | None = None
     invocation: dict[str, Any] | None = None
+    render_prewarm_output_pdf_path: Path | None = None
+    render_prewarm_artifacts_dir: Path | None = None
+    render_prewarm_mode: str = "auto"
+    render_prewarm_pdf_compress_dpi: int = 0
 
 
 @dataclass(frozen=True)
@@ -228,6 +232,10 @@ def translate_book(request: TranslationRequest) -> TranslationResult:
             glossary_overridden_entry_count=request.glossary_overridden_entry_count,
             glossary_entries=request.glossary_entries,
             invocation=request.invocation,
+            render_prewarm_output_pdf_path=request.render_prewarm_output_pdf_path,
+            render_prewarm_artifacts_dir=request.render_prewarm_artifacts_dir,
+            render_prewarm_mode=request.render_prewarm_mode,
+            render_prewarm_pdf_compress_dpi=request.render_prewarm_pdf_compress_dpi,
         )
     )
 

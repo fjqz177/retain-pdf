@@ -11,6 +11,8 @@ from services.rendering.workflow.modes import run_dual_render
 from services.rendering.workflow.modes import run_overlay_render
 from services.rendering.workflow.modes import run_selected_pages_overlay_render
 from services.rendering.source.render_source import build_render_source_pdf
+from services.rendering.source.prewarm import try_load_prewarmed_render_source_pdf
+from services.rendering.source.prewarm import try_load_render_payload_prewarm
 from services.translation.item_reader import item_block_kind
 
 
@@ -48,18 +50,52 @@ def execute_render_plan(
     base_url: str = "",
     typst_font_family: str = fonts.TYPST_DEFAULT_FONT_FAMILY,
     pdf_compress_dpi: int = runtime.DEFAULT_PDF_COMPRESS_DPI,
+    render_prewarm_manifest_path: Path | None = None,
 ) -> int:
     start = max(0, start_page)
     stop = max(render_plan.selected_pages) if end_page < 0 else end_page
-    render_source_pdf = build_render_source_pdf(
-        source_pdf_path=render_plan.render_inputs.source_pdf_path,
-        output_pdf_path=output_pdf_path,
-        pdf_compress_dpi=pdf_compress_dpi,
-        translated_pages=render_plan.selected_pages,
-        strip_hidden_text=render_plan.effective_render_mode != "overlay",
-        start_page=start,
-        end_page=stop,
+    render_source_pdf = (
+        try_load_prewarmed_render_source_pdf(
+            manifest_path=render_prewarm_manifest_path,
+            source_pdf_path=render_plan.render_inputs.source_pdf_path,
+            translated_pages=render_plan.selected_pages,
+            effective_render_mode=render_plan.effective_render_mode,
+            start_page=start,
+            end_page=stop,
+            pdf_compress_dpi=pdf_compress_dpi,
+        )
+        if render_prewarm_manifest_path is not None
+        else None
     )
+    payload_prewarm = (
+        try_load_render_payload_prewarm(
+            manifest_path=render_prewarm_manifest_path,
+            source_pdf_path=render_plan.render_inputs.source_pdf_path,
+            translated_pages=render_plan.selected_pages,
+            effective_render_mode=render_plan.effective_render_mode,
+            start_page=start,
+            end_page=stop,
+            pdf_compress_dpi=pdf_compress_dpi,
+        )
+        if render_prewarm_manifest_path is not None
+        else None
+    )
+    render_source_prewarm_hit = render_source_pdf is not None
+    if render_source_pdf is None:
+        render_source_pdf = build_render_source_pdf(
+            source_pdf_path=render_plan.render_inputs.source_pdf_path,
+            output_pdf_path=output_pdf_path,
+            pdf_compress_dpi=pdf_compress_dpi,
+            translated_pages=render_plan.selected_pages,
+            strip_hidden_text=render_plan.effective_render_mode != "overlay",
+            start_page=start,
+            end_page=stop,
+            bbox_text_strip_candidates=(
+                payload_prewarm.bbox_text_strip_candidates
+                if payload_prewarm is not None
+                else None
+            ),
+        )
 
     context = RenderExecutionContext(
         output_pdf_path=output_pdf_path,
@@ -72,6 +108,17 @@ def execute_render_plan(
         typst_font_family=typst_font_family,
         pdf_compress_dpi=pdf_compress_dpi,
         source_image_compressed=render_source_pdf.image_compressed,
+        indent_detection_pdf_path=render_plan.render_inputs.source_pdf_path,
+        first_line_indent_lookup=(
+            payload_prewarm.first_line_indent_lookup
+            if payload_prewarm is not None
+            else None
+        ),
+        effective_inner_bbox_lookup=(
+            payload_prewarm.effective_inner_bbox_lookup
+            if payload_prewarm is not None
+            else None
+        ),
     )
     render_diagnostics: dict[str, object] = {}
     try:
@@ -87,7 +134,12 @@ def execute_render_plan(
         )
         return pages_rendered
     finally:
-        execute_render_plan.last_render_diagnostics = render_diagnostics
+        execute_render_plan.last_render_diagnostics = {
+            **render_diagnostics,
+            "render_source_prewarm_hit": render_source_prewarm_hit,
+            "render_payload_prewarm_hit": payload_prewarm is not None,
+            "render_source_prewarm_manifest": str(render_prewarm_manifest_path or ""),
+        }
         for temp_source_path in render_source_pdf.temp_paths:
             temp_source_path.unlink(missing_ok=True)
 

@@ -125,6 +125,39 @@ function progressFromEvent(event) {
   return { current, total };
 }
 
+export function collectStageProgressByKey(job, eventsPayload) {
+  const items = Array.isArray(eventsPayload?.items) ? eventsPayload.items : [];
+  const progressByKey = {};
+  for (const item of items) {
+    const itemStage = `${item?.stage || item?.provider_stage || ""}`.trim();
+    if (!itemStage) {
+      continue;
+    }
+    const progress = progressFromEvent(item);
+    if (progress.current === null || progress.total === null || progress.total <= 0) {
+      continue;
+    }
+    const payload = {
+      ...job,
+      status: item.status || "running",
+      current_stage: itemStage,
+      stage_detail: item.stage_detail || item.message || "",
+      progress_current: progress.current,
+      progress_total: progress.total,
+    };
+    const stageKey = summarizeStageKey(payload);
+    if (!["ocr", "translate", "render"].includes(stageKey)) {
+      continue;
+    }
+    progressByKey[stageKey] = {
+      current: progress.current,
+      total: progress.total,
+      progressText: summarizeStageProgressText(payload),
+    };
+  }
+  return progressByKey;
+}
+
 function jobProgress(job = {}) {
   return {
     current: firstNumber(job?.progress_current, job?.progress?.current),
@@ -156,6 +189,7 @@ export function resolveDisplayedStagePresentation(job, eventsPayload) {
     progressText: summarizeStageProgressText(job) || stageFallback?.text || "",
     progressCurrent: fallbackProgress.current ?? stageFallback?.current ?? null,
     progressTotal: fallbackProgress.total ?? stageFallback?.total ?? null,
+    progressIndeterminate: fallbackProgress.current === null && fallbackProgress.total === null && Boolean(stageFallback),
   };
   const event = latestStageEvent(job, eventsPayload);
   if (!event) {
@@ -190,5 +224,6 @@ export function resolveDisplayedStagePresentation(job, eventsPayload) {
     progressText: eventProgressText || stageFallback?.text || "",
     progressCurrent: eventPayload.progress_current,
     progressTotal: eventPayload.progress_total,
+    progressIndeterminate: eventProgress.current === null && eventProgress.total === null && Boolean(stageFallback),
   };
 }

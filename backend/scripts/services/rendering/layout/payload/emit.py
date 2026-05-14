@@ -25,6 +25,8 @@ def payload_to_render_block(payload: dict) -> RenderBlock:
                 "_is_body_text_candidate": payload["is_body"],
                 "_dense_small_box": payload["dense_small_box"],
                 "_heavy_dense_small_box": payload["heavy_dense_small_box"],
+                "_short_body_inherited_font_floor_pt": payload.get("_short_body_inherited_font_floor_pt", 0.0),
+                "_relaxed_fit_height_pt": payload.get("_relaxed_fit_height_pt", 0.0),
             },
             payload["translated_text"],
             payload["formula_map"],
@@ -49,6 +51,8 @@ def payload_to_render_block(payload: dict) -> RenderBlock:
         render_kind=payload["render_kind"],
         font_size_pt=payload["font_size_pt"],
         leading_em=payload["leading_em"],
+        first_line_indent_pt=payload.get("first_line_indent_pt", 0.0),
+        justify_text=bool(payload.get("is_body") and payload["render_kind"] == "markdown"),
         font_weight=payload.get("font_weight", "regular"),
         fit_to_box=bool(fit_to_box and payload["render_kind"] == "markdown"),
         fit_single_line=fit_single_line,
@@ -61,6 +65,9 @@ def payload_to_render_block(payload: dict) -> RenderBlock:
         text_color=tuple(payload.get("text_color", (0, 0, 0))),
         cover_fill=tuple(payload.get("cover_fill", (1, 1, 1))),
         use_cover_fill=bool(payload["item"].get("_render_use_cover_fill", False)),
+        math_map=list(payload["formula_map"]),
+        skip_reason="adjacent_collision_risk" if payload.get("adjacent_collision_risk") else "",
+        source_item_id=str(payload["item"].get("item_id") or ""),
     )
 
 

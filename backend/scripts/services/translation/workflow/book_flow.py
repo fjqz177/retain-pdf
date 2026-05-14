@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Callable
 
 from services.translation.workflow.stages import run_continuation_review
 from services.translation.workflow.stages import run_garbled_reconstruction_stage
@@ -37,6 +38,8 @@ def translate_book_with_global_continuations(
     domain_guidance: str = "",
     translation_context: TranslationControlContext | None = None,
     run_diagnostics: TranslationRunDiagnostics | None = None,
+    render_prewarm_start_fn: Callable[[dict[int, list[dict]]], object] | None = None,
+    render_prewarm_handle_sink: Callable[[object | None], None] | None = None,
 ) -> tuple[dict[int, list[dict]], list[dict]]:
     if translation_context is not None:
         domain_guidance = translation_context.merged_guidance
@@ -83,6 +86,14 @@ def translate_book_with_global_continuations(
     if context_window_updates:
         print(f"book: translation context windows updated={context_window_updates}", flush=True)
     save_pages(page_payloads, translation_paths)
+    if render_prewarm_start_fn is not None:
+        try:
+            handle = render_prewarm_start_fn(page_payloads)
+            if render_prewarm_handle_sink is not None:
+                render_prewarm_handle_sink(handle)
+            print("book: render prewarm started", flush=True)
+        except Exception as exc:
+            print(f"book: render prewarm start failed {type(exc).__name__}: {exc}", flush=True)
 
     run_translation_batch_stage(
         page_payloads=page_payloads,

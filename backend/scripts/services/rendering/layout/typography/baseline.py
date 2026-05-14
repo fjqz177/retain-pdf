@@ -22,16 +22,21 @@ from services.rendering.layout.typography.line_metrics import median_line_pitch
 from services.rendering.layout.typography.scalars import percentile_value
 from services.translation.item_reader import item_block_kind
 from services.translation.item_reader import item_is_caption_like
+from services.translation.item_reader import item_is_footnote_like
 
 
 def candidate_text_items(items: list[dict]) -> list[dict]:
     candidates: list[dict] = []
-    widths = [bbox_width(item) for item in items if item_block_kind(item) == "text" and not item_is_caption_like(item)]
+    widths = [
+        bbox_width(item)
+        for item in items
+        if item_block_kind(item) == "text" and not item_is_caption_like(item) and not item_is_footnote_like(item)
+    ]
     page_text_width_med = median(widths) if widths else 0.0
     for item in items:
         if item_block_kind(item) != "text":
             continue
-        if item_is_caption_like(item):
+        if item_is_caption_like(item) or item_is_footnote_like(item):
             continue
         if source_visual_line_count(item) < 3:
             continue
