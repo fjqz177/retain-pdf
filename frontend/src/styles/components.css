@@ -1332,6 +1332,78 @@
     display: none !important;
   }
 
+  .download-toast {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 120;
+    width: min(320px, calc(100vw - 24px));
+  }
+
+  .download-toast.hidden {
+    display: none;
+  }
+
+  .download-toast-card {
+    display: grid;
+    gap: 10px;
+    padding: 14px 14px 12px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .download-toast-head {
+    display: grid;
+    gap: 4px;
+  }
+
+  .download-toast-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1.3;
+  }
+
+  .download-toast-status {
+    font-size: 12px;
+    color: #374151;
+    line-height: 1.4;
+  }
+
+  .download-toast-track {
+    height: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e5e7eb;
+  }
+
+  .download-toast-bar {
+    display: block;
+    width: 18%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #60a5fa, #2563eb);
+    transition: width 0.18s ease, background 0.18s ease;
+  }
+
+  .download-toast-meta {
+    font-size: 11px;
+    color: #6b7280;
+    line-height: 1.35;
+  }
+
+  .download-toast[data-tone="success"] .download-toast-bar {
+    background: linear-gradient(90deg, #4ade80, #16a34a);
+  }
+
+  .download-toast[data-tone="error"] .download-toast-bar {
+    background: linear-gradient(90deg, #f87171, #dc2626);
+  }
+
   @keyframes orbitPulse {
     0% {
       transform: scale(0.72);
@@ -1356,6 +1428,12 @@
   }
 
   @media (max-width: 767px) {
+    .download-toast {
+      right: 12px;
+      bottom: 12px;
+      width: min(320px, calc(100vw - 16px));
+    }
+
     .page {
       padding-inline: 1rem;
     }

@@ -32,6 +32,35 @@ def build_glossary_guidance(entries: list[GlossaryEntry]) -> str:
     return "\n".join(lines)
 
 
+TERM_WORD_CHARS = r"A-Za-z0-9_"
+
+
+def matched_glossary_entries(
+    entries: list[GlossaryEntry] | None,
+    text: str,
+    *,
+    include_levels: set[str] | None = None,
+) -> list[GlossaryEntry]:
+    normalized_entries = normalize_glossary_entries(entries)
+    if not normalized_entries or not text:
+        return []
+    allowed_levels = include_levels or {"preserve", "canonical", "preferred"}
+    matched: list[GlossaryEntry] = []
+    seen: set[tuple[str, str, str, str | None]] = set()
+    for entry in sorted(normalized_entries, key=lambda item: (-len(item.source), item.source.casefold())):
+        if entry.level not in allowed_levels:
+            continue
+        pattern = term_pattern(entry)
+        if not any(context_matches(text, entry, start=match.start(), end=match.end()) for match in pattern.finditer(text)):
+            continue
+        key = (entry.source.casefold(), entry.target.casefold(), entry.level, entry.context.casefold() if entry.context else None)
+        if key in seen:
+            continue
+        seen.add(key)
+        matched.append(entry)
+    return matched
+
+
 def normalize_glossary_entries(values: list[GlossaryEntry | dict[str, Any]] | None) -> list[GlossaryEntry]:
     normalized: list[GlossaryEntry] = []
     for item in values or []:
@@ -83,6 +112,23 @@ def glossary_hard_entries(entries: list[GlossaryEntry]) -> list[GlossaryEntry]:
         hard_entries,
         key=lambda entry: (-len(entry.source), 0 if entry.level == "preserve" else 1, entry.source.casefold()),
     )
+
+
+def term_pattern(entry: GlossaryEntry) -> re.Pattern[str]:
+    if entry.match_mode == "regex":
+        return re.compile(entry.source)
+    escaped = re.escape(entry.source)
+    pattern = rf"(?<![{TERM_WORD_CHARS}]){escaped}(?![{TERM_WORD_CHARS}])"
+    flags = re.IGNORECASE if entry.match_mode == "case_insensitive" else 0
+    return re.compile(pattern, flags)
+
+
+def context_matches(text: str, entry: GlossaryEntry, *, start: int, end: int) -> bool:
+    if not entry.context:
+        return True
+    window_start = max(0, start - 160)
+    window_end = min(len(text), end + 160)
+    return entry.context.casefold() in text[window_start:window_end].casefold()
 
 
 def _normalize_level(value: object) -> Literal["preserve", "canonical", "preferred"]:

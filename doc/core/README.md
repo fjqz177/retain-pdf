@@ -5,6 +5,7 @@
 ## 入口
 
 - [API 与联调](./api/README.md)
+- [贡献文档](./contributing/README.md)
 - [Rust API](./rust_api/README.md)
 - [OCR / 文档解析 Provider](./paddle_ocr_api/README.md)
 - [Python 后端](./python/README.md)

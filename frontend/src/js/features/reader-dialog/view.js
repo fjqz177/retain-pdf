@@ -164,9 +164,14 @@ export function setReaderButtonBusy(id, busy, label = "生成中…") {
     return "";
   }
   const previousMarkup = button.innerHTML;
+  if (!button.dataset.defaultMarkup) {
+    button.dataset.defaultMarkup = previousMarkup;
+  }
   if (busy) {
     button.disabled = true;
     button.innerHTML = `<span>${label}</span>`;
+  } else {
+    button.innerHTML = button.dataset.defaultMarkup || previousMarkup;
   }
   return previousMarkup;
 }
@@ -176,17 +181,6 @@ export function restoreReaderButton(id, markup) {
   if (button && typeof markup === "string") {
     button.innerHTML = markup;
   }
-}
-
-export function downloadReaderBlob(blob, filename) {
-  const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 export function bindReaderDialogEvents({

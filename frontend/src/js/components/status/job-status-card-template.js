@@ -76,6 +76,14 @@ export function jobStatusCardTemplate({
             </svg>
             <span>对照阅读</span>
           </a>
+          <a id="source-pdf-btn" class="button-link secondary disabled task-toolbar-btn task-toolbar-btn-result hidden" href="#" target="_blank" rel="noopener noreferrer" aria-label="下载源 PDF" title="下载源 PDF">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M7.2 4.8h6.2l3.4 3.4v11H7.2v-14.4Z" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/>
+              <path d="M13.4 4.95v3.35h3.25" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/>
+              <path d="M9.6 14.7h4.8M9.6 17.1h3.2" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+            </svg>
+            <span>源 PDF</span>
+          </a>
           <a id="pdf-btn" class="button-link secondary disabled task-toolbar-btn task-toolbar-btn-result hidden" href="#" target="_blank" rel="noopener noreferrer" aria-label="下载 PDF" title="下载 PDF">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M12 6v8.1" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"/>

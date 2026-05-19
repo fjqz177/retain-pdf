@@ -23,6 +23,7 @@ def translate_uncached_items_single(
     deferred_transport_items: list[dict] = []
     for index, item in enumerate(uncached_batch, start=1):
         item_label = f"{request_label} item {index}/{total_items} {item['item_id']}" if request_label else ""
+        item_context = context.scoped_to_item(item)
         try:
             result = single_item_translator(
                 item,
@@ -30,9 +31,9 @@ def translate_uncached_items_single(
                 model=model,
                 base_url=base_url,
                 request_label=item_label,
-                context=context,
+                context=item_context,
                 diagnostics=diagnostics,
-                allow_transport_tail_defer=context.fallback_policy.transport_tail_retry_passes > 0,
+                allow_transport_tail_defer=item_context.fallback_policy.transport_tail_retry_passes > 0,
             )
         except DeferredTransportRetry:
             deferred_transport_items.append(item)
@@ -44,10 +45,10 @@ def translate_uncached_items_single(
                 result,
                 model=model,
                 base_url=base_url,
-                domain_guidance=context.cache_guidance,
-                mode=context.mode,
-                target_lang=context.target_lang,
-                target_language_name=context.target_language_name,
+                domain_guidance=item_context.cache_guidance,
+                mode=item_context.mode,
+                target_lang=item_context.target_lang,
+                target_language_name=item_context.target_language_name,
             )
         merged.update(result)
     return merged, deferred_transport_items
@@ -76,20 +77,21 @@ def retry_deferred_transport_items(
         )
     for index, item in enumerate(deferred_transport_items, start=1):
         item_label = f"{request_label} tail item {index}/{len(deferred_transport_items)} {item['item_id']}" if request_label else ""
+        item_context = tail_context.scoped_to_item(item)
         result = single_item_translator(
             item,
             api_key=api_key,
             model=model,
             base_url=base_url,
             request_label=item_label,
-            context=tail_context,
+            context=item_context,
             diagnostics=diagnostics,
             allow_transport_tail_defer=False,
         )
         result = mark_transport_result_dead_letter(
             result,
             item=item,
-            context=tail_context,
+            context=item_context,
             diagnostics=diagnostics,
         )
         payload = result.get(item["item_id"], {})
@@ -99,10 +101,10 @@ def retry_deferred_transport_items(
                 result,
                 model=model,
                 base_url=base_url,
-                domain_guidance=tail_context.cache_guidance,
-                mode=tail_context.mode,
-                target_lang=tail_context.target_lang,
-                target_language_name=tail_context.target_language_name,
+                domain_guidance=item_context.cache_guidance,
+                mode=item_context.mode,
+                target_lang=item_context.target_lang,
+                target_language_name=item_context.target_language_name,
             )
         merged.update(result)
     return merged

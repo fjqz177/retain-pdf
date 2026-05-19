@@ -1,6 +1,7 @@
 from .abbreviations import AbbreviationEntry
 from .glossary import GlossaryEntry
 from .glossary import glossary_hard_entries
+from .glossary import matched_glossary_entries
 from .glossary import normalize_glossary_entries
 from .glossary import parse_glossary_json
 from .injection import build_terms_guidance
@@ -14,6 +15,7 @@ __all__ = [
     "auto_preserve_glossary_entries_from_texts",
     "build_terms_guidance",
     "glossary_hard_entries",
+    "matched_glossary_entries",
     "merge_auto_preserve_glossary_entries",
     "normalize_glossary_entries",
     "parse_glossary_json",

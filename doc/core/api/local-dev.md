@@ -21,7 +21,7 @@ cargo run
 
 ```bash
 cd /path/to/retain-pdf/frontend
-python3 -m http.server 8080 --bind 0.0.0.0
+python3 -m http.server 40001 --bind 0.0.0.0
 ```
 
 前端 API base 规则：

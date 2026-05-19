@@ -12,7 +12,9 @@ sys.path.insert(0, str(REPO_SCRIPTS_ROOT))
 
 
 from services.translation.batching.pending_units import _translate_batch_or_keep_origin
+from services.translation.llm.shared.orchestration.batched_plain import translate_items_plain_text
 from services.translation.llm.shared.control_context import build_translation_control_context
+from services.translation.terms import GlossaryEntry
 
 
 def _item(item_id: str, text: str, **overrides):
@@ -96,3 +98,56 @@ def test_translate_batch_wrapper_appends_relevant_job_memory_to_domain_guidance(
     assert "DFTB =>" not in captured["domain_guidance"]
     assert "SCF => 自洽场" in captured["context"].merged_guidance
     assert "DFTB =>" not in captured["context"].merged_guidance
+
+
+def test_translate_items_plain_text_sends_only_matched_glossary_entries_to_prompt() -> None:
+    captured: dict[str, str] = {}
+    batch = [
+        _item(
+            "a",
+            "The SCF cycle is converged before evaluating the total energy.",
+            _batched_plain_candidate=True,
+        ),
+        _item(
+            "b",
+            "Hartree-Fock orbitals provide the initial guess.",
+            _batched_plain_candidate=True,
+        ),
+    ]
+    context = build_translation_control_context(
+        glossary_entries=[
+            GlossaryEntry(source="SCF", target="自洽场", level="preferred"),
+            GlossaryEntry(source="DFTB", target="密度泛函紧束缚", level="preferred"),
+            GlossaryEntry(source="Hartree-Fock", target="Hartree-Fock", level="preserve", match_mode="case_insensitive"),
+        ]
+    )
+
+    def _translate_batch_once(batch_arg, **kwargs):
+        captured["domain_guidance"] = kwargs["domain_guidance"]
+        return {
+            item["item_id"]: {
+                "decision": "translate",
+                "translated_text": "已翻译",
+                "final_status": "translated",
+            }
+            for item in batch_arg
+        }
+
+    result = translate_items_plain_text(
+        batch,
+        api_key="sk-test",
+        model="deepseek-chat",
+        base_url="https://api.deepseek.com/v1",
+        request_label="test glossary scope",
+        context=context,
+        diagnostics=None,
+        single_item_translator=lambda *_args, **_kwargs: {},
+        split_cached_batch_fn=lambda batch_arg, **_kwargs: ({}, batch_arg),
+        store_cached_batch_fn=lambda *_args, **_kwargs: None,
+        translate_batch_once_fn=_translate_batch_once,
+    )
+
+    assert result["a"]["translated_text"] == "已翻译"
+    assert "SCF -> 自洽场" in captured["domain_guidance"]
+    assert "DFTB" not in captured["domain_guidance"]
+    assert "Hartree-Fock -> Hartree-Fock" not in captured["domain_guidance"]

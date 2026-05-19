@@ -7,8 +7,10 @@ import re
 from typing import Iterable
 
 from services.translation.terms.glossary import GlossaryEntry
+from services.translation.terms.glossary import context_matches
 from services.translation.terms.glossary import glossary_hard_entries
 from services.translation.terms.glossary import normalize_glossary_entries
+from services.translation.terms.glossary import term_pattern
 
 
 LEGACY_FORMULA_PLACEHOLDER_RE = re.compile(r"\[\[FORMULA_(\d+)]]")
@@ -21,7 +23,6 @@ PROTECTED_TOKEN_RE = re.compile(
 )
 INLINE_MATH_RE = re.compile(r"\$(?P<body>[^$\n]+)\$")
 PROSE_BOUNDARY_RE = re.compile(r"([}\]])([A-Za-z][a-z]{2,})")
-TERM_WORD_CHARS = r"A-Za-z0-9_"
 LATEX_FORMULA_RE = re.compile(
     r"""
     (
@@ -248,23 +249,6 @@ def _should_protect_segment_formula_candidate(value: str, *, merged_left_fragmen
     return not _should_skip_formula_candidate(value)
 
 
-def _term_pattern(entry: GlossaryEntry) -> re.Pattern[str]:
-    if entry.match_mode == "regex":
-        return re.compile(entry.source)
-    escaped = re.escape(entry.source)
-    pattern = rf"(?<![{TERM_WORD_CHARS}]){escaped}(?![{TERM_WORD_CHARS}])"
-    flags = re.IGNORECASE if entry.match_mode == "case_insensitive" else 0
-    return re.compile(pattern, flags)
-
-
-def _context_matches(text: str, entry: GlossaryEntry, *, start: int, end: int) -> bool:
-    if not entry.context:
-        return True
-    window_start = max(0, start - 160)
-    window_end = min(len(text), end + 160)
-    return entry.context.casefold() in text[window_start:window_end].casefold()
-
-
 def _overlaps_any(span: tuple[int, int], selected: list[_Span]) -> bool:
     start, end = span
     return any(start < existing.end and end > existing.start for existing in selected)
@@ -289,12 +273,12 @@ def _collect_term_spans(text: str, glossary_entries: list[GlossaryEntry] | None)
     ]
     term_spans: list[_Span] = []
     for entry in glossary_hard_entries(normalize_glossary_entries(glossary_entries)):
-        pattern = _term_pattern(entry)
+        pattern = term_pattern(entry)
         for match in pattern.finditer(text):
             start, end = match.span()
             if start == end or _overlaps_any((start, end), selected):
                 continue
-            if not _context_matches(text, entry, start=start, end=end):
+            if not context_matches(text, entry, start=start, end=end):
                 continue
             original = match.group(0)
             restore_text = original if entry.level == "preserve" else entry.target

@@ -4,6 +4,70 @@ function trimString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function stripExtension(filename) {
+  const normalized = trimString(filename);
+  if (!normalized) {
+    return "";
+  }
+  const index = normalized.lastIndexOf(".");
+  if (index <= 0) {
+    return normalized;
+  }
+  return normalized.slice(0, index);
+}
+
+function sanitizeFilenamePart(value) {
+  return `${value || ""}`.replace(/[\\/:*?"<>|]+/g, "_").trim();
+}
+
+function basenameFromUrlLike(value) {
+  const raw = trimString(value);
+  if (!raw) {
+    return "";
+  }
+  try {
+    const parsed = new URL(raw, window.location.href);
+    const pathname = parsed.pathname || "";
+    const candidate = pathname.split("/").filter(Boolean).pop() || "";
+    return decodeURIComponent(candidate);
+  } catch (_err) {
+    const candidate = raw.split(/[/?#]/)[0]?.split("/").filter(Boolean).pop() || "";
+    return candidate;
+  }
+}
+
+export function resolveOriginalPdfBaseName(state = {}) {
+  const snapshot = state.currentJobSnapshot || {};
+  const requestPayload = snapshot.request_payload || {};
+  const rawResponse = snapshot.raw_response || {};
+  const sourceArtifact = findReadyManifestArtifact(state.currentJobManifest, "source_pdf");
+  const candidates = [
+    state.uploadedFileName,
+    rawResponse.filename,
+    rawResponse.file_name,
+    rawResponse.original_filename,
+    rawResponse.original_file_name,
+    requestPayload.filename,
+    requestPayload.file_name,
+    requestPayload.original_filename,
+    requestPayload.original_file_name,
+    requestPayload.source_filename,
+    requestPayload.source_file_name,
+    sourceArtifact?.filename,
+    sourceArtifact?.file_name,
+    sourceArtifact?.name,
+    basenameFromUrlLike(sourceArtifact?.resource_path),
+    basenameFromUrlLike(sourceArtifact?.resource_url),
+  ];
+  const originalName = candidates.find((value) => typeof value === "string" && value.trim()) || "";
+  return sanitizeFilenamePart(stripExtension(originalName));
+}
+
+export function resolveTranslatedPdfDownloadName(state = {}, fallbackName = "") {
+  const originalName = resolveOriginalPdfBaseName(state);
+  return originalName ? `zh_${originalName}.pdf` : fallbackName;
+}
+
 function ensureTrailingSlash(value) {
   const trimmed = trimString(value);
   if (!trimmed) {

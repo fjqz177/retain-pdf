@@ -159,6 +159,7 @@ docker compose ps
 
 建议按下面顺序阅读。
 
+- [贡献指南](CONTRIBUTING.md)
 - [文档目录](doc/README.md)
 - [主线文档](doc/core/README.md)
 - [参考资料](doc/reference/README.md)

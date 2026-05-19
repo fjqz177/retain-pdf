@@ -101,6 +101,7 @@ def translate_items_plain_text(
     store_cached_batch_fn=store_cached_batch,
     translate_batch_once_fn=translate_batch_once,
 ) -> dict[str, dict[str, str]]:
+    context = context.scoped_to_batch(batch)
     batch = [item_with_runtime_hard_glossary(item, context.glossary_entries) for item in batch]
     merged, uncached_batch = split_and_validate_cached_batch(
         batch,

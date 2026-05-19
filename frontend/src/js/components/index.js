@@ -9,4 +9,5 @@ import "./layout/app-shell-header.js";
 import "./status/job-status-card.js";
 import "./upload/page-range-summary.js";
 import "./feedback/inline-error-box.js";
+import "./feedback/download-toast.js";
 import "./status/task-toolbar.js";

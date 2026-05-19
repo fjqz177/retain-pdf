@@ -5,6 +5,7 @@ set -eu
 : "${FRONT_X_API_KEY:=}"
 : "${FRONT_OCR_PROVIDER:=paddle}"
 : "${FRONT_PADDLE_TOKEN:=}"
+: "${FRONT_PADDLE_API_URL:=}"
 : "${FRONT_MINERU_TOKEN:=}"
 : "${FRONT_MODEL_API_KEY:=}"
 : "${FRONT_MODEL:=deepseek-v4-flash}"
@@ -27,6 +28,7 @@ window.__FRONT_RUNTIME_CONFIG__ = {
   xApiKey: "${FRONT_X_API_KEY}",
   ocrProvider: "${FRONT_OCR_PROVIDER}",
   paddleToken: "${FRONT_PADDLE_TOKEN}",
+  paddleApiUrl: "${FRONT_PADDLE_API_URL}",
   mineruToken: "${FRONT_MINERU_TOKEN}",
   modelApiKey: "${FRONT_MODEL_API_KEY}",
   model: "${FRONT_MODEL}",

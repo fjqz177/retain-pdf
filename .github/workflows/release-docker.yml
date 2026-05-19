@@ -30,21 +30,9 @@ jobs:
           - name: app
             file: docker/Dockerfile.app
             repo: retainpdf-app
-            build-args: |
-              http_proxy
-              https_proxy
-              HTTP_PROXY
-              HTTPS_PROXY
-              ALL_PROXY
           - name: web
             file: docker/Dockerfile.web
             repo: retainpdf-web
-            build-args: |
-              http_proxy
-              https_proxy
-              HTTP_PROXY
-              HTTPS_PROXY
-              ALL_PROXY
 
     steps:
       - name: Checkout
@@ -85,18 +73,19 @@ jobs:
       - name: Generate build args
         id: build-args
         run: |
-          args=""
-          for var in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY; do
-            val="$(printenv "$var" || true)"
-            if [ -n "$val" ]; then
-              args="${args} --build-arg ${var}=${val}"
-            fi
-          done
-          # Pass TYPST_VERSION from the Dockerfile default unless overridden
-          if [ -n "${TYPST_VERSION:-}" ]; then
-            args="${args} --build-arg TYPST_VERSION=${TYPST_VERSION}"
-          fi
-          echo "flags=${args}" >> "$GITHUB_OUTPUT"
+          {
+            for var in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY TYPST_VERSION; do
+              val="$(printenv "$var" || true)"
+              if [ -n "$val" ]; then
+                echo "${var}=${val}"
+              fi
+            done
+          } > /tmp/build-args.txt
+          {
+            echo 'args<<EOF'
+            cat /tmp/build-args.txt
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -105,7 +94,7 @@ jobs:
           file: ${{ matrix.target.file }}
           platforms: ${{ inputs.platforms || 'linux/amd64,linux/arm64' }}
           push: ${{ inputs.push || github.event_name == 'push' }}
-          build-args: ${{ steps.build-args.outputs.flags }}
+          build-args: ${{ steps.build-args.outputs.args }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

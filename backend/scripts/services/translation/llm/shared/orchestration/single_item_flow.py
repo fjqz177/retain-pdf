@@ -122,6 +122,7 @@ def translate_single_item_plain_text_with_retries(
     allow_transport_tail_defer: bool = False,
     deps: SingleItemFlowDeps | None = None,
 ) -> dict[str, dict[str, str]]:
+    context = context.scoped_to_item(item)
     item = item_with_runtime_hard_glossary(item, context.glossary_entries)
     flow_deps = deps or _default_flow_deps()
     single_item_translator = flow_deps.single_item_translator_fn or translate_single_item_plain_text_with_retries
@@ -250,6 +251,7 @@ def translate_items_plain_text(
     context: TranslationControlContext,
     diagnostics: TranslationDiagnosticsCollector | None = None,
 ) -> dict[str, dict[str, str]]:
+    context = context.scoped_to_batch(batch)
     return _translate_items_plain_text(
         batch,
         api_key=api_key,

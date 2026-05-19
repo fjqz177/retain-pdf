@@ -23,6 +23,7 @@ export function mountWorkflowFeature({
   defaultModelName,
   defaultModelBaseUrl,
   defaultMineruToken,
+  defaultPaddleApiUrl,
   defaultPaddleToken,
   defaultOcrProvider,
   defaultModelApiKey,
@@ -277,13 +278,17 @@ export function mountWorkflowFeature({
       defaultPaddleToken: defaultPaddleToken(),
       defaultMineruToken: defaultMineruToken(),
     });
-    return {
+    const payload = {
       provider,
       [definition.tokenField]: token,
       model_version: DEFAULT_MODEL_VERSION,
       language: DEFAULT_LANGUAGE,
       page_ranges: pageRanges,
     };
+    if (definition.id === "paddle") {
+      payload.paddle_api_url = defaultPaddleApiUrl() || "https://paddleocr.aistudio-app.com";
+    }
+    return payload;
   }
 
   function buildTranslationPayload(developerConfig) {

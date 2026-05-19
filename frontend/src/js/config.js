@@ -49,6 +49,9 @@ export function apiBase() {
   if (typeof runtimeConfig.apiBase === "string" && runtimeConfig.apiBase.trim()) {
     return runtimeConfig.apiBase.trim().replace(/\/+$/, "").replace(new RegExp(`${API_V1_SUFFIX}$`), "");
   }
+  if (!isFileProtocol() && window.location.protocol === "https:") {
+    return window.location.origin;
+  }
   const host = window.location.hostname || "127.0.0.1";
   const protocol = window.location.protocol === "https:" ? "https:" : "http:";
   return `${protocol}//${host}:41000`;
@@ -92,6 +95,10 @@ export function defaultMineruToken() {
 
 export function defaultPaddleToken() {
   return typeof runtimeConfig.paddleToken === "string" ? runtimeConfig.paddleToken : "";
+}
+
+export function defaultPaddleApiUrl() {
+  return typeof runtimeConfig.paddleApiUrl === "string" ? runtimeConfig.paddleApiUrl.trim() : "";
 }
 
 export function defaultOcrProvider() {

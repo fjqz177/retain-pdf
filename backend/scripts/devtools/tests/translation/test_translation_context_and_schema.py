@@ -100,6 +100,24 @@ def test_translation_control_context_merges_terms_retrieval_and_extra_guidance()
     assert "extra-guidance" in merged
 
 
+def test_translation_control_context_scopes_glossary_to_matching_source_text() -> None:
+    context = control_context.build_translation_control_context(
+        glossary_entries=[
+            control_context.GlossaryEntry(source="Hartree-Fock", target="Hartree-Fock", level="preserve", match_mode="case_insensitive"),
+            control_context.GlossaryEntry(source="SCF", target="自洽场", level="preferred"),
+            control_context.GlossaryEntry(source="DFTB", target="密度泛函紧束缚", level="preferred"),
+        ],
+    )
+
+    scoped = context.scoped_to_source_texts(["The SCF procedure uses Hartree-Fock orbitals."])
+
+    assert [entry.source for entry in scoped.glossary_entries] == ["Hartree-Fock", "SCF"]
+    assert "Hartree-Fock -> Hartree-Fock" not in scoped.merged_guidance
+    assert "SCF -> 自洽场" in scoped.merged_guidance
+    assert "DFTB" not in scoped.merged_guidance
+    assert "SCF -> 自洽场" in scoped.cache_guidance
+
+
 def test_build_translation_context_from_policy_uses_policy_guidance() -> None:
     class _Policy:
         mode = "sci"

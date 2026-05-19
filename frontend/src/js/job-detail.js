@@ -2,6 +2,17 @@ import { buildFrontendPageUrl, isMockMode } from "./config.js";
 import { API_PREFIX } from "./constants.js";
 import { $ } from "./dom.js";
 import {
+  fileNameFromDisposition,
+  prepareDownloadTarget,
+  saveResponseDownload,
+} from "./downloads.js";
+import {
+  completeDownloadToast,
+  failDownloadToast,
+  showDownloadPreparing,
+  updateDownloadProgress,
+} from "./download-feedback.js";
+import {
   fetchJobDiagnostics,
   fetchJobArtifactsManifest,
   fetchJobEvents,
@@ -270,33 +281,6 @@ function renderFailureDebugContext(job) {
   `).join("");
 }
 
-function fileNameFromDisposition(disposition, fallback) {
-  if (!disposition || typeof disposition !== "string") {
-    return fallback;
-  }
-  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match && utf8Match[1]) {
-    try {
-      return decodeURIComponent(utf8Match[1]);
-    } catch (_err) {
-      return utf8Match[1];
-    }
-  }
-  const plainMatch = disposition.match(/filename=\"?([^\";]+)\"?/i);
-  return plainMatch && plainMatch[1] ? plainMatch[1] : fallback;
-}
-
-function downloadBlob(blob, filename) {
-  const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-}
-
 function revokeMarkdownImageUrls() {
   revokeMarkdownImageUrlsView(detailPageState.markdownImageUrls);
 }
@@ -353,18 +337,35 @@ function bindProtectedDownloadLink(id, fallbackNameFactory) {
       return;
     }
     event.preventDefault();
+    const fallbackName = fallbackNameFactory(detailPageState.job?.job_id || "job");
+    const downloadTarget = await prepareDownloadTarget(fallbackName);
+    if (downloadTarget.kind === "aborted") {
+      return;
+    }
     try {
+      showDownloadPreparing(fallbackName);
       const resp = await fetchProtected(url);
       if (!resp.ok) {
         const text = await resp.text();
         throw new Error(`下载失败: ${resp.status} ${text || "unknown error"}`);
       }
-      const blob = await resp.blob();
       const disposition = resp.headers.get("content-disposition") || "";
-      const fallbackName = fallbackNameFactory(detailPageState.job?.job_id || "job");
-      downloadBlob(blob, fileNameFromDisposition(disposition, fallbackName));
+      const filename = fileNameFromDisposition(disposition, fallbackName);
+      await saveResponseDownload(resp, {
+        target: downloadTarget,
+        filename,
+        onProgress: ({ receivedBytes, totalBytes, percent, done }) => {
+          if (done) {
+            setText("detail-head-note", `已开始保存 ${filename}`);
+            completeDownloadToast(filename);
+            return;
+          }
+          updateDownloadProgress({ filename, receivedBytes, totalBytes, percent });
+        },
+      });
     } catch (error) {
       setText("detail-head-note", error.message || "下载失败");
+      failDownloadToast(error.message || "下载失败");
     }
   });
 }
