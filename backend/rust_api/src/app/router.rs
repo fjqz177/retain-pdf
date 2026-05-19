@@ -102,7 +102,12 @@ pub fn build_app(state: AppState) -> Router {
             "/api/v1/jobs/:job_id/resume-plan",
             get(jobs::get_resume_plan),
         )
+        .route(
+            "/api/v1/jobs/:job_id/stage-actions",
+            get(jobs::get_stage_actions),
+        )
         .route("/api/v1/jobs/:job_id/resume", post(jobs::resume_job))
+        .route("/api/v1/jobs/:job_id/retry-stage", post(jobs::retry_stage))
         .route(
             "/api/v1/jobs/:job_id/translation/diagnostics",
             get(jobs::get_translation_diagnostics),

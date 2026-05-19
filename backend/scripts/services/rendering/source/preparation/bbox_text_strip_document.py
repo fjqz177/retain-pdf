@@ -41,6 +41,7 @@ def strip_bbox_text_rects_from_pdf_copy(
     copy_elapsed = time.perf_counter() - copy_started
 
     pages_changed = 0
+    attempted_page_indices = set(page_rects)
     changed_page_indices: set[int] = set()
     removed_total = 0
     forms_changed_total = 0
@@ -75,8 +76,10 @@ def strip_bbox_text_rects_from_pdf_copy(
                 changed=False,
                 pages_skipped_complex=skipped_complex,
                 pages_skipped_no_text_overlap=skipped_no_text_overlap,
+                pages_strip_no_effect=len(attempted_page_indices),
                 skipped_complex_page_indices=frozenset(skipped_complex_page_indices),
                 skipped_no_text_overlap_page_indices=frozenset(skipped_no_text_overlap_page_indices),
+                strip_no_effect_page_indices=frozenset(attempted_page_indices),
             )
 
         save_started = time.perf_counter()
@@ -92,6 +95,7 @@ def strip_bbox_text_rects_from_pdf_copy(
         f"bbox text strip: mode=strip pages={pages_changed} text_show_ops={removed_total} "
         f"forms={forms_changed_total} skipped_complex_pages={skipped_complex} "
         f"skipped_no_text_overlap_pages={skipped_no_text_overlap} "
+        f"strip_no_effect_pages={len(attempted_page_indices - changed_page_indices)} "
         f"copy={copy_elapsed:.2f}s candidates={candidate_elapsed:.2f}s parse={parse_elapsed:.2f}s save={save_elapsed:.2f}s "
         f"output={output_pdf_path}",
         flush=True,
@@ -103,8 +107,10 @@ def strip_bbox_text_rects_from_pdf_copy(
         text_show_ops_removed=removed_total,
         pages_skipped_complex=skipped_complex,
         pages_skipped_no_text_overlap=skipped_no_text_overlap,
+        pages_strip_no_effect=len(attempted_page_indices - changed_page_indices),
         forms_changed=forms_changed_total,
         changed_page_indices=frozenset(changed_page_indices),
         skipped_complex_page_indices=frozenset(skipped_complex_page_indices),
         skipped_no_text_overlap_page_indices=frozenset(skipped_no_text_overlap_page_indices),
+        strip_no_effect_page_indices=frozenset(attempted_page_indices - changed_page_indices),
     )

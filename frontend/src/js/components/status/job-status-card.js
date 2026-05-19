@@ -32,6 +32,9 @@ class JobStatusCard extends HTMLElement {
   #selectedStageKey = "";
   #manualStageSelection = false;
   #lastSnapshot = null;
+  #currentJobId = "";
+  #progressAnimationTimer = null;
+  #displayedProgressByStage = {};
 
   connectedCallback() {
     if (this.dataset.hydrated === "1") {
@@ -58,6 +61,22 @@ class JobStatusCard extends HTMLElement {
       this.#selectedStageKey = stageKey;
       this.#renderSelectedStage();
     });
+    this.addEventListener("click", (event) => {
+      const button = event.target?.closest?.(".status-stage-retry-btn");
+      const stage = button?.dataset?.retryStage || "";
+      if (!stage || button.disabled) {
+        return;
+      }
+      this.dispatchEvent(new CustomEvent("retainpdf:retry-stage", {
+        bubbles: true,
+        composed: true,
+        detail: { stage },
+      }));
+    });
+  }
+
+  disconnectedCallback() {
+    this.#clearProgressAnimation();
   }
 
   setStagePresentation({ label = "等待中", value = "准备中", stageKey = "" } = {}) {
@@ -128,10 +147,18 @@ class JobStatusCard extends HTMLElement {
       current: Number.isFinite(current) ? current : NaN,
       total: Number.isFinite(total) ? total : NaN,
       progressText: progress?.progressText || substageFallback?.progressText || fallback?.progressText || "",
+      progressUnit: progress?.progressUnit || substageFallback?.progressUnit || fallback?.progressUnit || "",
       indeterminate: Boolean(progress?.indeterminate ?? progress?.progressIndeterminate ?? substageFallback?.indeterminate ?? substageFallback?.progressIndeterminate ?? fallback?.indeterminate ?? fallback?.progressIndeterminate),
       substageKey: progressSubstageKey,
       visualStageKey: progress?.visualStageKey || substageFallback?.visualStageKey || fallback?.visualStageKey || "",
     };
+  }
+
+  #clearProgressAnimation() {
+    if (this.#progressAnimationTimer) {
+      clearTimeout(this.#progressAnimationTimer);
+      this.#progressAnimationTimer = null;
+    }
   }
 
   setElapsed(value = "-") {
@@ -151,6 +178,8 @@ class JobStatusCard extends HTMLElement {
   }
 
   renderSnapshot({
+    jobId = "",
+    status = "",
     label = "等待中",
     value = "准备中",
     stageKey = "",
@@ -160,17 +189,29 @@ class JobStatusCard extends HTMLElement {
     progressFallbackText = "-",
     progressPercent = NaN,
     progressText = "",
+    progressUnit = "",
     progressIndeterminate = false,
     substageKey = "",
     errorText = "",
     visualStageKey = "",
     stageProgressByKey = {},
+    stageRetryActions = {},
     pdfReady = false,
     readerReady = false,
     cancelEnabled = false,
     backHomeVisible = false,
   } = {}) {
+    const normalizedJobId = `${jobId || ""}`.trim();
+    if (normalizedJobId && normalizedJobId !== this.#currentJobId) {
+      this.#currentJobId = normalizedJobId;
+      this.#clearProgressAnimation();
+      this.#displayedProgressByStage = {};
+      this.#manualStageSelection = false;
+      this.#selectedStageKey = "";
+    }
     this.#lastSnapshot = {
+      jobId: normalizedJobId,
+      status,
       label,
       value,
       stageKey,
@@ -180,11 +221,13 @@ class JobStatusCard extends HTMLElement {
       progressFallbackText,
       progressPercent,
       progressText,
+      progressUnit,
       progressIndeterminate,
       substageKey,
       errorText,
       visualStageKey,
       stageProgressByKey,
+      stageRetryActions,
       pdfReady,
       readerReady,
       cancelEnabled,
@@ -217,6 +260,7 @@ class JobStatusCard extends HTMLElement {
       current: snapshot.progressCurrent,
       total: snapshot.progressTotal,
       progressText: snapshot.progressText,
+      progressUnit: snapshot.progressUnit,
       indeterminate: snapshot.progressIndeterminate,
       substageKey: snapshot.substageKey,
       visualStageKey: snapshot.visualStageKey,
@@ -234,21 +278,109 @@ class JobStatusCard extends HTMLElement {
       errorSummaryEl.textContent = errorText;
       errorSummaryEl.classList.toggle("hidden", !selectedIsError || !errorText);
     }
-    this.setProgress({
-      current: selectedProgress?.current,
-      total: selectedProgress?.total,
-      fallbackText: snapshot.progressFallbackText,
-      percent: selectedIsCurrent ? snapshot.progressPercent : NaN,
-      progressText: selectedProgress?.progressText || "",
-      indeterminate: selectedProgress?.indeterminate,
-      stageKey: selected,
-      forceVisible: ["ocr", "translate", "render"].includes(selected)
-        && (selectedIsCurrent || Boolean(selectedProgress)),
+    this.#setAnimatedProgress({
+      selected,
+      selectedIsCurrent,
+      snapshot,
+      selectedProgress,
     });
     this.syncPrimaryActions({
       pdfReady: selected === "done" && snapshot.pdfReady,
       readerReady: selected === "done" && snapshot.readerReady,
     });
+    this.#renderStageRetryAction(selected, snapshot.stageRetryActions?.[selected]);
+  }
+
+  #setAnimatedProgress({ selected, selectedIsCurrent, snapshot, selectedProgress }) {
+    const targetCurrent = Number(selectedProgress?.current);
+    const targetTotal = Number(selectedProgress?.total);
+    const status = `${snapshot?.status || ""}`.trim();
+    const canAnimateRenderPages = selected === "render"
+      && selectedIsCurrent
+      && status === "running"
+      && selectedProgress?.progressUnit !== "percent"
+      && Number.isFinite(targetCurrent)
+      && Number.isFinite(targetTotal)
+      && targetTotal > 0
+      && targetCurrent > 0;
+    const previous = this.#displayedProgressByStage[selected];
+    const rawPreviousCurrent = Number(previous?.current);
+    const previousCurrent = Number.isFinite(rawPreviousCurrent) ? rawPreviousCurrent : 0;
+    const previousTotal = Number(previous?.total);
+    const shouldAnimate = canAnimateRenderPages
+      && (!Number.isFinite(previousTotal) || previousTotal === targetTotal)
+      && targetCurrent > previousCurrent + 1;
+    if (!shouldAnimate) {
+      this.#clearProgressAnimation();
+      this.#displayedProgressByStage[selected] = {
+        current: Number.isFinite(targetCurrent) ? targetCurrent : null,
+        total: Number.isFinite(targetTotal) ? targetTotal : null,
+      };
+      this.setProgress({
+        current: selectedProgress?.current,
+        total: selectedProgress?.total,
+        fallbackText: snapshot.progressFallbackText,
+        percent: selectedIsCurrent ? snapshot.progressPercent : NaN,
+        progressText: selectedProgress?.progressText || "",
+        progressUnit: selectedProgress?.progressUnit || "",
+        indeterminate: selectedProgress?.indeterminate,
+        stageKey: selected,
+        forceVisible: ["ocr", "translate", "render"].includes(selected)
+          && (selectedIsCurrent || Boolean(selectedProgress)),
+      });
+      return;
+    }
+
+    this.#clearProgressAnimation();
+    let displayedCurrent = previousCurrent;
+    const tick = () => {
+      displayedCurrent = Math.min(targetCurrent, displayedCurrent + 1);
+      this.#displayedProgressByStage[selected] = {
+        current: displayedCurrent,
+        total: targetTotal,
+      };
+      const progressText = displayedCurrent >= targetCurrent
+        ? selectedProgress?.progressText || ""
+        : `第 ${displayedCurrent}/${targetTotal} 页`;
+      this.setProgress({
+        current: displayedCurrent,
+        total: targetTotal,
+        fallbackText: snapshot.progressFallbackText,
+        percent: NaN,
+        progressText,
+        progressUnit: "",
+        indeterminate: false,
+        stageKey: selected,
+        forceVisible: true,
+      });
+      if (displayedCurrent < targetCurrent) {
+        this.#progressAnimationTimer = setTimeout(tick, 120);
+      }
+    };
+    tick();
+  }
+
+  #renderStageRetryAction(selected, action) {
+    const container = this.querySelector("#status-stage-retry");
+    if (!container) {
+      return;
+    }
+    if (!["ocr", "translate", "render"].includes(selected) || !action) {
+      container.classList.add("hidden");
+      container.replaceChildren();
+      return;
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "status-stage-retry-btn";
+    button.dataset.retryStage = action.stage || (selected === "translate" ? "translation" : selected);
+    button.disabled = !action.canRetry;
+    button.textContent = action.label || "重新执行";
+    if (action.disabledReason) {
+      button.title = action.disabledReason;
+    }
+    container.replaceChildren(button);
+    container.classList.remove("hidden");
   }
 }
 

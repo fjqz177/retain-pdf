@@ -14,6 +14,7 @@ from services.rendering.document.metadata import copy_toc
 from services.rendering.source.items import iter_valid_translated_items
 from services.rendering.source.redaction import redact_source_text_areas
 from services.rendering.source.vector_text import collect_vector_text_rects
+from services.pipeline_shared.events import emit_render_page_progress
 
 
 def build_clean_background_pdf(
@@ -23,6 +24,7 @@ def build_clean_background_pdf(
     output_pdf_path: Path,
     redaction_strategy: str | None = None,
     page_specs: list[RenderPageSpec] | None = None,
+    source_text_precleaned_page_indices: frozenset[int] = frozenset(),
 ) -> Path:
     output_pdf_path.parent.mkdir(parents=True, exist_ok=True)
     working_pdf_path = output_pdf_path.with_suffix(".background-source.pdf")
@@ -32,8 +34,22 @@ def build_clean_background_pdf(
     specs_by_page = {spec.page_index: spec for spec in page_specs or []}
     try:
         copy_toc(source_doc, output_doc)
-        for page_index in sorted(translated_pages):
+        ordered_page_indices = sorted(translated_pages)
+        total_pages = len(ordered_page_indices)
+        for completed, page_index in enumerate(ordered_page_indices, start=1):
             if not (0 <= page_index < len(output_doc)):
+                continue
+            if page_index in source_text_precleaned_page_indices:
+                emit_render_page_progress(
+                    current=completed,
+                    total=total_pages,
+                    message=f"正在复用已清理原文背景，第 {completed}/{total_pages} 页",
+                    payload={
+                        "render_stage": "source_background_precleaned_reuse",
+                        "page_index": page_index,
+                        "substage": "render_pages",
+                    },
+                )
                 continue
             page = output_doc[page_index]
             redaction_items = translated_pages[page_index]
@@ -60,6 +76,16 @@ def build_clean_background_pdf(
                 fill_background=None,
                 cover_only=bool(collect_vector_text_rects(page, target_rects)),
                 strategy=page_redaction_strategy,
+            )
+            emit_render_page_progress(
+                current=completed,
+                total=total_pages,
+                message=f"正在清理原文背景，第 {completed}/{total_pages} 页",
+                payload={
+                    "render_stage": "source_background_cleanup",
+                    "page_index": page_index,
+                    "substage": "render_pages",
+                },
             )
         save_optimized_pdf(output_doc, output_pdf_path)
         return output_pdf_path

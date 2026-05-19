@@ -4,7 +4,7 @@
 
 - [前端状态 Smoke](./status_smoke.md)
 - [前端优化记录](./optimization_notes.md)
-- [前端状态 Smoke 最新报告](../reports/frontend-status-smoke-latest.json)
+- [前端状态 Smoke 最新报告](../../ops/reports/frontend-status-smoke-latest.json)
 
 主要代码入口：
 

@@ -202,6 +202,41 @@
     display: none;
   }
 
+  .status-stage-retry {
+    min-height: 26px;
+    display: grid;
+    place-items: center;
+  }
+
+  .status-stage-retry.hidden {
+    display: none;
+  }
+
+  .status-stage-retry-btn {
+    appearance: none;
+    min-height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid #d2d2d7;
+    background: #fff;
+    color: #1d1d1f;
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .status-stage-retry-btn:hover:not(:disabled) {
+    background: #1d1d1f;
+    border-color: #1d1d1f;
+    color: #fff;
+  }
+
+  .status-stage-retry-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
   .status-progress-text {
     text-align: center;
     font-size: 12px;

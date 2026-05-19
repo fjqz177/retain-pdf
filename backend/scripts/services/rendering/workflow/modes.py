@@ -146,7 +146,7 @@ def run_background_typst_render(
         print("typst visual-only background render selected", flush=True)
     else:
         print("typst background render selected", flush=True)
-    build_book_typst_background_pdf(
+    background_diagnostics = build_book_typst_background_pdf(
         source_pdf_path=source_pdf_path,
         output_pdf_path=context.output_pdf_path,
         translated_pages=translated_pages,
@@ -154,11 +154,16 @@ def run_background_typst_render(
         model=context.model,
         base_url=context.base_url,
         font_family=context.typst_font_family,
+        compile_workers=context.compile_workers,
         redaction_strategy="visual_cover" if visual_only_background else None,
         indent_detection_pdf_path=_indent_detection_pdf_path(context, source_pdf_path),
         first_line_indent_lookup=context.first_line_indent_lookup,
         effective_inner_bbox_lookup=context.effective_inner_bbox_lookup,
+        source_text_precleaned_page_indices=context.source_text_precleaned_page_indices,
     )
     mode = "typst_visual" if visual_only_background else "typst"
     final_compressed = _compress_final_pdf_if_needed(context, mode=mode)
-    return len(translated_pages), {"mode": mode, "final_image_compressed": final_compressed}
+    diagnostics = dict(background_diagnostics)
+    diagnostics["mode"] = mode
+    diagnostics["final_image_compressed"] = final_compressed
+    return len(translated_pages), diagnostics

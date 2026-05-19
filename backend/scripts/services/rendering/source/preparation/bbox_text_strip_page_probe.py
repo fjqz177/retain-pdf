@@ -3,6 +3,7 @@ from __future__ import annotations
 import fitz
 
 from services.rendering.source.preparation.bbox_text_strip_constants import BBOX_TEXT_STRIP_CONTENT_STREAM_SIZE_THRESHOLD
+from services.rendering.source.vector_profile import collect_page_drawing_rects
 
 
 def page_has_text_overlap(
@@ -11,6 +12,22 @@ def page_has_text_overlap(
 ) -> bool:
     _drawing_count, text_overlap_count = page_bboxlog_stats(page, target_rects)
     return text_overlap_count > 0
+
+
+def page_has_vector_overlap_in_text_rects(
+    page: fitz.Page,
+    target_rects: list[fitz.Rect],
+) -> bool:
+    if not target_rects:
+        return False
+    drawing_rects = collect_page_drawing_rects(page)
+    if not drawing_rects:
+        return False
+    return any(
+        not (target_rect & drawing_rect).is_empty
+        for target_rect in target_rects
+        for drawing_rect in drawing_rects
+    )
 
 
 def page_content_stream_too_large(doc: fitz.Document, page: fitz.Page) -> bool:

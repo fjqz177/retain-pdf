@@ -12,6 +12,7 @@ sys.path.insert(0, str(REPO_SCRIPTS_ROOT))
 
 from runtime.pipeline.render_plan import RenderPlan
 from runtime.pipeline.render_inputs import RenderInputs
+from foundation.config import layout
 from services.rendering.source.prewarm import RenderPrewarmSpec
 from services.rendering.source.prewarm import prewarm_manifest_path_from_artifacts_dir
 from services.rendering.source.prewarm import start_render_source_prewarm
@@ -311,7 +312,8 @@ def test_render_source_prewarm_keeps_no_text_overlap_pages_as_precleaned() -> No
 
         assert prepared is not None
         assert prepared.bbox_text_stripped_page_indices == frozenset()
-        assert prepared.source_text_precleaned_page_indices == frozenset({0})
+        assert prepared.bbox_text_strip_skipped_page_indices == frozenset({0})
+        assert prepared.source_text_precleaned_page_indices == frozenset()
 
 
 def test_payload_prewarm_default_pikepdf_text_strip_exposes_bbox_candidates() -> None:
@@ -350,6 +352,12 @@ def test_payload_prewarm_default_pikepdf_text_strip_exposes_bbox_candidates() ->
         assert payload_prewarm is not None
         assert payload_prewarm.bbox_text_strip_candidates is not None
         assert payload_prewarm.bbox_text_strip_candidates.page_rects
+
+
+def test_redact_restore_formula_strategy_is_runtime_alias_for_pikepdf_text_strip() -> None:
+    assert layout.normalize_source_cleanup_strategy("redact_restore_formulas") == "pikepdf_text_strip"
+    assert layout.use_bbox_text_strip_cleanup("redact_restore_formulas") is True
+    assert layout.use_redact_restore_formula_cleanup("redact_restore_formulas") is False
 
 
 def test_payload_prewarm_explicit_typst_fill_skips_bbox_candidates() -> None:

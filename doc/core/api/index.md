@@ -441,7 +441,7 @@ PDF 元数据：
 - `GET /api/v1/ocr/jobs/{job_id}/normalization-report`
 - `POST /api/v1/ocr/jobs/{job_id}/cancel`
 
-## 9. 术语表接口
+## 10. 术语表接口
 
 - `POST /api/v1/glossaries/parse-csv`
 - `POST /api/v1/glossaries`
@@ -543,7 +543,7 @@ CSV 表头支持英文和中文别名：
 
 任务提交时可通过 `translation.glossary_id` 引用命名术语表，也可通过 `translation.glossary_entries` 传 inline 条目。
 
-## 10. Provider 校验
+## 11. Provider 校验
 
 - `POST /api/v1/providers/mineru/validate-token`
 - `POST /api/v1/providers/paddle/validate-token`
@@ -558,7 +558,7 @@ CSV 表头支持英文和中文别名：
 - `network_error`
 - `provider_error`
 
-## 11. Simple App 入口
+## 12. Simple App 入口
 
 `POST /api/v1/translate/bundle`
 
@@ -566,7 +566,7 @@ CSV 表头支持英文和中文别名：
 
 该接口返回 `ApiResponse<JobSubmissionView>`，不会等待 Python OCR / 翻译 / 渲染完成，也不会同步返回 ZIP。
 
-## 12. 存储与所有权
+## 13. 存储与所有权
 
 后端是书籍、PDF、产物和封面的唯一真源。前端不持久化真实文件。
 
@@ -585,7 +585,7 @@ SQLite 主要表：
 - `job_artifact_entries`：规范化产物 manifest
 - `events`：完整历史进度流
 
-## 13. 专题文档
+## 14. 专题文档
 
 - [本地启动与配置](./local-dev.md)
 - [存储结构](./storage.md)

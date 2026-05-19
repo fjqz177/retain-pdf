@@ -13,6 +13,7 @@ use super::query_adapter::{
     job_artifact_manifest_response, job_artifacts_response, job_detail_response,
     job_diagnostics_response, job_events_response, list_jobs_response, reader_metadata_response,
     reader_regions_response, rerun_job_response, resume_job_response, resume_plan_response,
+    retry_stage_response, stage_actions_response,
 };
 
 pub async fn list_jobs(
@@ -108,6 +109,14 @@ pub async fn get_resume_plan(
     resume_plan_response(build_jobs_route_deps(&state), &job_id)
 }
 
+pub async fn get_stage_actions(
+    State(state): State<AppState>,
+    AxumPath(job_id): AxumPath<String>,
+    headers: HeaderMap,
+) -> Result<Json<ApiResponse<crate::models::StageActionsView>>, AppError> {
+    stage_actions_response(build_jobs_route_deps(&state), &headers, &job_id)
+}
+
 pub async fn resume_job(
     State(state): State<AppState>,
     AxumPath(job_id): AxumPath<String>,
@@ -122,6 +131,15 @@ pub async fn rerun_job(
     headers: HeaderMap,
 ) -> Result<Json<ApiResponse<crate::models::JobSubmissionView>>, AppError> {
     rerun_job_response(build_jobs_route_deps(&state), &headers, &job_id)
+}
+
+pub async fn retry_stage(
+    State(state): State<AppState>,
+    AxumPath(job_id): AxumPath<String>,
+    headers: HeaderMap,
+    Json(request): Json<crate::models::RetryStageRequest>,
+) -> Result<Json<ApiResponse<crate::models::RetryStageSubmissionView>>, AppError> {
+    retry_stage_response(build_jobs_route_deps(&state), &headers, &job_id, request)
 }
 
 pub async fn get_job_artifacts(
@@ -338,6 +356,214 @@ mod tests {
         assert_eq!(payload["data"]["from_stage"], "render");
         assert_eq!(payload["data"]["resume_workflow"], "render");
         assert_eq!(payload["data"]["reruns_stages"], json!(["rendering"]));
+    }
+
+    #[tokio::test]
+    async fn stage_actions_route_reports_retryable_stages() {
+        let state = test_state("stage-actions");
+        let mut source_job = source_job_with_artifacts(
+            "job-stage-actions",
+            JobArtifacts {
+                source_pdf: Some("jobs/source/source/input.pdf".to_string()),
+                normalized_document_json: Some("jobs/source/ocr/document.v1.json".to_string()),
+                translations_dir: Some("jobs/source/translated".to_string()),
+                ..JobArtifacts::default()
+            },
+        );
+        source_job.status = JobStatusKind::Succeeded;
+        state.db.save_job(&source_job).expect("save source job");
+
+        let response = build_app(state)
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/jobs/job-stage-actions/stage-actions")
+                    .header("X-API-Key", "test-key")
+                    .body(Body::empty())
+                    .expect("stage actions request"),
+            )
+            .await
+            .expect("stage actions response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let payload = read_json(response).await;
+        assert_eq!(payload["data"]["job_id"], "job-stage-actions");
+        let stages = payload["data"]["stages"].as_array().expect("stages");
+        let translation = stages
+            .iter()
+            .find(|item| item["stage"] == "translation")
+            .expect("translation action");
+        assert_eq!(translation["can_retry"], true);
+        assert_eq!(translation["will_rerun"], json!(["translation", "render"]));
+        assert_eq!(
+            translation["action"]["url"],
+            "http://127.0.0.1:41000/api/v1/jobs/job-stage-actions/retry-stage"
+        );
+        let render = stages
+            .iter()
+            .find(|item| item["stage"] == "render")
+            .expect("render action");
+        assert_eq!(render["can_retry"], true);
+        assert_eq!(render["will_rerun"], json!(["render"]));
+    }
+
+    #[tokio::test]
+    async fn retry_stage_route_creates_translation_recovery_job_with_overrides() {
+        let state = test_state("retry-stage-translation");
+        let mut source_job = source_job_with_artifacts(
+            "job-retry-stage-translation-source",
+            JobArtifacts {
+                source_pdf: Some("jobs/source/source/input.pdf".to_string()),
+                normalized_document_json: Some("jobs/source/ocr/document.v1.json".to_string()),
+                ..JobArtifacts::default()
+            },
+        );
+        source_job.status = JobStatusKind::Succeeded;
+        state.db.save_job(&source_job).expect("save source job");
+
+        let response = build_app(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/jobs/job-retry-stage-translation-source/retry-stage")
+                    .header("X-API-Key", "test-key")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "stage": "translation",
+                            "overrides": {
+                                "translation": {
+                                    "model": "deepseek-v4-flash",
+                                    "workers": 50
+                                },
+                                "render": {
+                                    "compile_workers": 8
+                                }
+                            }
+                        })
+                        .to_string(),
+                    ))
+                    .expect("retry stage request"),
+            )
+            .await
+            .expect("retry stage response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let payload = read_json(response).await;
+        assert_eq!(
+            payload["data"]["source_job_id"],
+            "job-retry-stage-translation-source"
+        );
+        assert_eq!(payload["data"]["workflow"], "book");
+        assert_eq!(payload["data"]["rerun_from_stage"], "translation");
+        assert_eq!(
+            payload["data"]["reused_artifacts"],
+            json!(["source_pdf", "ocr_result"])
+        );
+        let retry_job_id = payload["data"]["job_id"].as_str().expect("job id");
+        let retry_job = state.db.get_job(retry_job_id).expect("retry job");
+        assert_eq!(retry_job.workflow, crate::models::WorkflowKind::Book);
+        assert_eq!(
+            retry_job.request_payload.source.artifact_job_id,
+            "job-retry-stage-translation-source"
+        );
+        assert_eq!(retry_job.request_payload.translation.workers, 50);
+        assert_eq!(retry_job.request_payload.render.compile_workers, 8);
+    }
+
+    #[tokio::test]
+    async fn retry_stage_route_creates_render_job_by_default() {
+        let state = test_state("retry-stage-render");
+        let mut source_job = source_job_with_artifacts(
+            "job-retry-stage-render-source",
+            JobArtifacts {
+                source_pdf: Some("jobs/source/source/input.pdf".to_string()),
+                normalized_document_json: Some("jobs/source/ocr/document.v1.json".to_string()),
+                translations_dir: Some("jobs/source/translated".to_string()),
+                ..JobArtifacts::default()
+            },
+        );
+        source_job.status = JobStatusKind::Succeeded;
+        state.db.save_job(&source_job).expect("save source job");
+
+        let response = build_app(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/jobs/job-retry-stage-render-source/retry-stage")
+                    .header("X-API-Key", "test-key")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(json!({ "stage": "render" }).to_string()))
+                    .expect("retry render request"),
+            )
+            .await
+            .expect("retry render response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let payload = read_json(response).await;
+        assert_eq!(payload["data"]["workflow"], "render");
+        assert_eq!(payload["data"]["rerun_stages"], json!(["render"]));
+        let retry_job_id = payload["data"]["job_id"].as_str().expect("job id");
+        assert_ne!(retry_job_id, "job-retry-stage-render-source");
+        let retry_job = state.db.get_job(retry_job_id).expect("retry job");
+        assert_eq!(retry_job.workflow, crate::models::WorkflowKind::Render);
+        assert_eq!(
+            retry_job.request_payload.source.artifact_job_id,
+            "job-retry-stage-render-source"
+        );
+    }
+
+    #[tokio::test]
+    async fn retry_stage_route_allows_in_place_render_when_requested() {
+        let state = test_state("retry-stage-render-in-place");
+        let mut source_job = source_job_with_artifacts(
+            "job-retry-stage-render-in-place",
+            JobArtifacts {
+                source_pdf: Some("jobs/source/source/input.pdf".to_string()),
+                normalized_document_json: Some("jobs/source/ocr/document.v1.json".to_string()),
+                translations_dir: Some("jobs/source/translated".to_string()),
+                output_pdf: Some("jobs/source/output/old.pdf".to_string()),
+                ..JobArtifacts::default()
+            },
+        );
+        source_job.status = JobStatusKind::Succeeded;
+        state.db.save_job(&source_job).expect("save source job");
+
+        let response = build_app(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/jobs/job-retry-stage-render-in-place/retry-stage")
+                    .header("X-API-Key", "test-key")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "stage": "render",
+                            "create_new_job": false
+                        })
+                        .to_string(),
+                    ))
+                    .expect("retry render in place request"),
+            )
+            .await
+            .expect("retry render in place response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let payload = read_json(response).await;
+        assert_eq!(payload["data"]["job_id"], "job-retry-stage-render-in-place");
+        assert_eq!(payload["data"]["workflow"], "render");
+        let retry_job = state
+            .db
+            .get_job("job-retry-stage-render-in-place")
+            .expect("retry job");
+        assert_eq!(retry_job.workflow, crate::models::WorkflowKind::Render);
+        assert_eq!(retry_job.status, JobStatusKind::Queued);
+        assert!(retry_job
+            .artifacts
+            .as_ref()
+            .expect("artifacts")
+            .output_pdf
+            .is_none());
     }
 
     #[tokio::test]
@@ -710,7 +936,7 @@ mod tests {
             concat!(
                 r#"{"job_id":"job-route-render-progress","seq":1,"ts":"2026-04-24T01:00:00Z","level":"info","stage":"rendering","stage_detail":"正在渲染第 1/3 页","provider":"","provider_stage":"","event_type":"stage_progress","message":"正在渲染第 1/3 页","progress_current":1,"progress_total":3,"retry_count":0,"elapsed_ms":1000,"payload":{"page_index":0,"render_stage":"book_overlay"}}"#,
                 "\n",
-                r#"{"job_id":"job-route-render-progress","seq":2,"ts":"2026-04-24T01:00:01Z","level":"info","stage":"saving","stage_detail":"最终 PDF 已发布","provider":"","provider_stage":"","event_type":"artifact_published","message":"最终 PDF 已发布","progress_current":null,"progress_total":null,"retry_count":0,"elapsed_ms":1100,"payload":{"artifact_key":"output_pdf"}}"#,
+                r#"{"job_id":"job-route-render-progress","seq":2,"ts":"2026-04-24T01:00:01Z","level":"error","stage":"failed","stage_detail":"渲染失败","provider":"","provider_stage":"","event_type":"job_terminal","message":"任务进入终态 failed","progress_current":null,"progress_total":null,"retry_count":0,"elapsed_ms":1100,"payload":{}}"#,
                 "\n"
             ),
         )

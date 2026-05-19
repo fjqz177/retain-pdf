@@ -64,7 +64,7 @@ def _is_micro_formula_segment(text: str) -> bool:
     words = _segment_word_tokens(normalized)
     if not words:
         return True
-    if len(words) <= 2 and len(normalized) <= 20:
+    if len(words) <= 2 and len(normalized) <= 20 and all(word in _MICRO_CONNECTOR_SEGMENTS for word in words):
         return True
     if len(words) <= 3 and len(normalized) <= 24 and (
         words[0] in _MICRO_CONNECTOR_SEGMENTS or words[-1] in _MICRO_CONNECTOR_SEGMENTS

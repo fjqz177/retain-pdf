@@ -15,6 +15,7 @@ from services.rendering.layout.model.models import RenderLayoutBlock
 from services.rendering.layout.model.models import RenderPageSpec
 from services.rendering.layout.title_fit import apply_title_fit_budget_to_render_blocks
 from services.rendering.policy import apply_render_pages_policy_fields
+from services.pipeline_shared.events import emit_render_page_progress
 from foundation.config import layout
 
 
@@ -108,7 +109,9 @@ def build_render_page_specs(
             )
         book_body_font_target = resolve_book_body_font_target_from_payloads(list(page_payloads.values()))
         page_specs: list[RenderPageSpec] = []
-        for page_index in sorted(page_payloads):
+        ordered_page_indices = sorted(page_payloads)
+        total_pages = len(ordered_page_indices)
+        for completed, page_index in enumerate(ordered_page_indices, start=1):
             page = source_doc[page_index]
             block_payloads, page_text_width_med = page_payloads[page_index]
             page_specs.append(
@@ -121,6 +124,16 @@ def build_render_page_specs(
                     book_body_font_target=book_body_font_target,
                     background_pdf_path=background_pdf_path,
                 )
+            )
+            emit_render_page_progress(
+                current=completed,
+                total=total_pages,
+                message=f"正在准备渲染页面，第 {completed}/{total_pages} 页",
+                payload={
+                    "render_stage": "layout_page_specs",
+                    "page_index": page_index,
+                    "substage": "render_pages",
+                },
             )
         return page_specs
     finally:

@@ -13,7 +13,7 @@
 - 向 MinerU 提交任务
 - 查询任务状态
 - 下载并解包 MinerU 结果
-- 组织 `output/<job-id>/source`、`ocr`、`translated`、`rendered`、`artifacts`、`logs`
+- 在标准 job root 下整理 MinerU provider 产物，主要写入 `source/`、`ocr/unpacked/` 和 `ocr/normalized/`
 - 保留 raw `layout.json` 供 adapter、调试和回溯使用
 - 产出统一中间层 `document.v1.json`
 
@@ -39,12 +39,12 @@
 
 ## 目录结构
 
-- `output/<job-id>/source`
-- `output/<job-id>/ocr`
-- `output/<job-id>/translated`
-- `output/<job-id>/rendered`
-- `output/<job-id>/artifacts`
-- `output/<job-id>/logs`
+- `<job-root>/source`
+- `<job-root>/ocr`
+- `<job-root>/translated`
+- `<job-root>/rendered`
+- `<job-root>/artifacts`
+- `<job-root>/logs`
 
 ## 默认约定
 
@@ -98,34 +98,17 @@
 
 ## Provider Stage Spec
 
-Rust API 侧当前会优先通过：
+`provider.stage.v1` 现在主要保留给本地 provider-case helper 和兼容路径：
 
 `python -u scripts/entrypoints/run_provider_case.py --spec <job_root>/specs/provider.spec.json`
 
-驱动完整流程，对应 schema 为 `provider.stage.v1`。
-
-当前约定：
-
-- `source`
-  只保存 `file_url` 或 `file_path`
-- `ocr`
-  保存 MinerU 请求参数与 `credential_ref`
-- `translation`
-  保存翻译参数、术语表元数据和翻译 `credential_ref`
-- `render`
-  保存渲染参数
+生产主链中，Rust API 负责 provider-backed OCR flow：按请求中的 OCR provider 分发 MinerU / Paddle transport，产出 provider raw 结果后再进入 normalize、translate 和 render 阶段。MinerU provider 代码仍只维护 MinerU API 语义和 raw 产物整理，不定义上层 book workflow contract。
 
 安全约定：
 
-- MinerU token 不直接落盘到 spec
-- spec 中使用 `credential_ref=env:RETAIN_MINERU_API_TOKEN`
+- MinerU token 不直接落盘到 spec 或 job artifact
+- 兼容 provider spec 中使用 `credential_ref=env:RETAIN_MINERU_API_TOKEN`
 - 翻译 key 同样使用 `credential_ref=env:RETAIN_TRANSLATION_API_KEY`
-- 运行时由 Rust 注入环境变量，Python worker 再解析
-
-运行说明：
-
-- Rust 主工作流调用的 MinerU worker 现在要求 `--spec`
-- 如果只是本地手动试跑，走 `scripts/entrypoints/run_provider_case.py`
 
 兼容说明：
 

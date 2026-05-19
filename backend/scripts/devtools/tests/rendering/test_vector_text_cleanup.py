@@ -108,8 +108,10 @@ def test_bbox_text_strip_rects_shrink_away_from_adjacent_display_formula() -> No
     ]
 
     rects = build_page_strip_rects_for_items(page_height=page_height, translated_items=items)
+    formula_rects = build_page_formula_rects_for_items(page_height=page_height, translated_items=items)
 
-    assert rects == []
+    assert rects
+    assert all((rect & formula).is_empty for rect in rects for formula in formula_rects)
 
 
 def test_bbox_text_strip_rects_split_around_overlapping_display_formula() -> None:
@@ -130,8 +132,10 @@ def test_bbox_text_strip_rects_split_around_overlapping_display_formula() -> Non
     ]
 
     rects = build_page_strip_rects_for_items(page_height=page_height, translated_items=items)
+    formula_rects = build_page_formula_rects_for_items(page_height=page_height, translated_items=items)
 
-    assert rects == []
+    assert len(rects) == 2
+    assert all((rect & formula).is_empty for rect in rects for formula in formula_rects)
 
 
 def test_bbox_text_strip_formula_guard_expands_to_body_column() -> None:
@@ -156,10 +160,83 @@ def test_bbox_text_strip_formula_guard_expands_to_body_column() -> None:
     formula_rects = build_page_formula_rects_for_items(page_height=page_height, translated_items=items)
     protected = formula_guard_rects(formula_rects, strip_rects=source_rects)
 
-    assert strip_rects == []
-    assert source_rects == []
+    assert strip_rects
+    assert source_rects
     assert formula_rects
     assert protected
+
+
+def test_bbox_text_strip_keeps_text_between_display_formulas_deletable() -> None:
+    page_height = 728.16
+    items = [
+        {
+            "item_id": "p009-b003",
+            "block_type": "formula",
+            "block_kind": "formula",
+            "normalized_sub_type": "display_formula",
+            "bbox": [68.963, 136.936, 336.817, 170.92],
+        },
+        {
+            "item_id": "p009-b005",
+            "block_type": "text",
+            "block_kind": "text",
+            "bbox": [43.476, 180.916, 392.787, 216.899],
+            "protected_translated_text": "正文译文",
+        },
+        {
+            "item_id": "p009-b006",
+            "block_type": "formula",
+            "block_kind": "formula",
+            "normalized_sub_type": "display_formula",
+            "bbox": [123.933, 220.897, 309.832, 249.883],
+        },
+    ]
+
+    rects = build_page_strip_rects_for_items(page_height=page_height, translated_items=items)
+    source_rects = build_page_strip_source_rects_for_items(page_height=page_height, translated_items=items)
+    formula_rects = build_page_formula_rects_for_items(page_height=page_height, translated_items=items)
+    protected = formula_guard_rects(formula_rects, strip_rects=source_rects)
+
+    assert len(rects) == 1
+    assert rects[0].y0 <= page_height - 216.899
+    assert rects[0].y1 >= page_height - 180.916
+    assert all((rects[0] & guard).is_empty for guard in protected)
+
+
+def test_bbox_text_strip_keeps_formula_neighbor_text_deletable() -> None:
+    page_height = 728.16
+    items = [
+        {
+            "item_id": "p005-b004",
+            "block_type": "text",
+            "block_kind": "text",
+            "bbox": [33.482, 265.376, 398.284, 301.359],
+            "protected_translated_text": "公式上方正文",
+        },
+        {
+            "item_id": "p005-b005",
+            "block_type": "formula",
+            "block_kind": "formula",
+            "normalized_sub_type": "display_formula",
+            "bbox": [125.932, 305.857, 306.834, 334.844],
+        },
+        {
+            "item_id": "p005-b007",
+            "block_type": "text",
+            "block_kind": "text",
+            "bbox": [33.482, 343.34, 398.784, 559.739],
+            "protected_translated_text": "公式下方正文",
+        },
+    ]
+
+    rects = build_page_strip_rects_for_items(page_height=page_height, translated_items=items)
+    formula_rects = build_page_formula_rects_for_items(page_height=page_height, translated_items=items)
+    p005_b004 = fitz.Rect(33.482, page_height - 301.359, 398.284, page_height - 265.376)
+    p005_b007 = fitz.Rect(33.482, page_height - 559.739, 398.784, page_height - 343.34)
+
+    assert any(not (rect & p005_b004).is_empty for rect in rects)
+    assert any(not (rect & p005_b007).is_empty for rect in rects)
+    assert all((rect & formula).is_empty for rect in rects for formula in formula_rects)
 
 
 def test_bbox_text_strip_candidates_skip_formula_pages(tmp_path: Path) -> None:

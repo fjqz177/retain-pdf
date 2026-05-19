@@ -34,7 +34,7 @@ impl<'a> JobsFacade<'a> {
     }
 }
 
-fn prepare_in_place_render_job(mut job: JobSnapshot) -> Result<JobSnapshot, AppError> {
+pub(super) fn prepare_in_place_render_job(mut job: JobSnapshot) -> Result<JobSnapshot, AppError> {
     if matches!(job.status, JobStatusKind::Queued | JobStatusKind::Running) {
         return Err(AppError::conflict(
             "job is already queued or running; cancel it before rerender",

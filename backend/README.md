@@ -44,12 +44,12 @@ local-runtime/
 
 ## 当前拆分边界
 
-后端解耦进度以仓库根目录的 `task_decoupling_master.csv` 为准。当前稳定边界是：
+后端解耦状态以主线文档和架构门禁为准。当前稳定边界是：
 
 - Rust API 负责任务状态、stage spec、事件、artifact 引用和进程编排。
 - Python `backend/scripts/runtime/pipeline/` 只做阶段编排，不直接消费 OCR provider 原始结构。
 - Python 翻译入口走 `services.translation.workflow` facade。
-- Python 渲染源 PDF 预处理走 `services.rendering.source_pdf`，不要把 hidden-text strip / compression 细节写回 runtime pipeline。
+- Python 渲染源 PDF 预处理走 `services.rendering.source.render_source` 和 `services.rendering.source.preparation.*`，不要把 hidden-text strip / compression 细节写回 runtime pipeline。
 - OCR provider 原始产物必须先进入 `document.v1.json`，翻译和渲染只消费 normalized document 与 translation artifacts。
 
 新增跨层依赖前，先跑：

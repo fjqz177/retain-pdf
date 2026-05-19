@@ -399,7 +399,7 @@ fn build_translation_job_snapshot_for_full_pipeline_succeeds() {
     .expect("parse render config");
     assert_eq!(render_config["schema_version"], "render_config.v1");
     assert_eq!(render_config["source"], "rust_api_resolved_job_spec");
-    assert_eq!(render_config["render"]["render_mode"], "auto");
+    assert_eq!(render_config["render"]["render_mode"], "typst");
     assert_eq!(
         render_config["render"]["source_cleanup_strategy"],
         "pikepdf_text_strip"

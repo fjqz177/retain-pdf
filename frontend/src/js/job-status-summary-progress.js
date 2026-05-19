@@ -26,7 +26,10 @@ export function summarizeStageProgressText(payload) {
       return `OCR 处理中，共 ${total} 页`;
     }
     if (stage.key === "render" && current <= 0) {
-      return `渲染准备中，共 ${total} 页`;
+      return `正在渲染，共 ${total} 页`;
+    }
+    if (stage.key === "render" && current >= total) {
+      return `渲染完成，共 ${total} 页`;
     }
     return `第 ${current}/${total} 页`;
   }
@@ -34,6 +37,12 @@ export function summarizeStageProgressText(payload) {
     return `第 ${current}/${total} 批`;
   }
   if (progressUnit === "step") {
+    if (stage.key === "render" && subtype === "render_prepare") {
+      return `准备 ${current}/${total}`;
+    }
+    if (stage.key === "render" && subtype === "render_compile") {
+      return `编译 ${current}/${total}`;
+    }
     return `进度 ${current}/${total}`;
   }
   if (progressUnit === "percent") {

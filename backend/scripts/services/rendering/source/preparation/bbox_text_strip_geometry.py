@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import fitz
 
-from services.rendering.source.preparation.bbox_text_strip_policy_adapter import expanded_formula_guard_rect
-from services.rendering.source.preparation.bbox_text_strip_policy_adapter import expanded_formula_guard_rects
+from services.rendering.source.preparation.bbox_text_strip_constants import BBOX_TEXT_STRIP_FORMULA_GUARD_PAD_X_PT
+from services.rendering.source.preparation.bbox_text_strip_constants import BBOX_TEXT_STRIP_FORMULA_GUARD_PAD_Y_PT
 from services.rendering.source.preparation.bbox_text_strip_policy_adapter import split_rect_away_from_formula_guard_rects
 
 
@@ -27,17 +27,21 @@ def formula_guard_rects(
     *,
     strip_rects: list[fitz.Rect] | None = None,
 ) -> list[fitz.Rect]:
-    return expanded_formula_guard_rects(formula_rects, strip_rects or [])
+    return [bbox_text_strip_formula_guard_rect(rect) for rect in formula_rects if not rect.is_empty]
 
 
 def split_rect_away_from_formulas(rect: fitz.Rect, formula_rects: list[fitz.Rect]) -> list[fitz.Rect]:
-    guards: list[fitz.Rect] = []
-    for formula in formula_rects:
-        guard = expanded_formula_guard_rect(formula, [])
-        guard.x0 = min(guard.x0, rect.x0 - 8.0)
-        guard.x1 = max(guard.x1, rect.x1 + 8.0)
-        guards.append(guard)
+    guards = [bbox_text_strip_formula_guard_rect(formula) for formula in formula_rects]
     return split_rect_away_from_formula_guard_rects(rect, guards)
+
+
+def bbox_text_strip_formula_guard_rect(formula: fitz.Rect) -> fitz.Rect:
+    return fitz.Rect(
+        formula.x0 - BBOX_TEXT_STRIP_FORMULA_GUARD_PAD_X_PT,
+        formula.y0 - BBOX_TEXT_STRIP_FORMULA_GUARD_PAD_Y_PT,
+        formula.x1 + BBOX_TEXT_STRIP_FORMULA_GUARD_PAD_X_PT,
+        formula.y1 + BBOX_TEXT_STRIP_FORMULA_GUARD_PAD_Y_PT,
+    )
 
 
 def shrink_rect_away_from_formulas(rect: fitz.Rect, formula_rects: list[fitz.Rect]) -> fitz.Rect:

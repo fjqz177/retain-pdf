@@ -14,7 +14,7 @@ pub(crate) fn default_rule_profile_name() -> String {
     "general_sci".to_string()
 }
 pub(crate) fn default_render_mode() -> String {
-    "auto".to_string()
+    "typst".to_string()
 }
 pub(crate) fn default_typst_font_family() -> String {
     "Source Han Serif SC".to_string()

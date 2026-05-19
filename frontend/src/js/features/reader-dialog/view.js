@@ -11,21 +11,26 @@ function easeOutCubic(value) {
 export function animateReaderProgressValue(progressState, nextValue) {
   const component = readerDialogComponent();
   const barEl = $("reader-dialog-loading-bar");
+  const percentEl = $("reader-dialog-loading-percent");
   const target = Math.max(0, Math.min(100, Number(nextValue) || 0));
   const from = Number(progressState.value) || 0;
 
-  if (!barEl && !component?.setLoadingProgress) {
+  if (!barEl && !percentEl && !component?.setLoadingProgress) {
     progressState.value = target;
     progressState.target = target;
     return;
   }
 
   const applyWidth = (value) => {
+    const safeValue = Math.max(0, Math.min(100, Number(value) || 0));
     if (barEl) {
-      barEl.style.width = `${value}%`;
+      barEl.style.width = `${safeValue}%`;
+    }
+    if (percentEl) {
+      percentEl.textContent = `${safeValue.toFixed(0)}%`;
     }
     if (component?.setLoadingProgress) {
-      component.setLoadingProgress({ widthPercent: value });
+      component.setLoadingProgress({ widthPercent: safeValue });
     }
   };
 
@@ -42,7 +47,7 @@ export function animateReaderProgressValue(progressState, nextValue) {
     progressState.rafId = 0;
   }
 
-  const duration = Math.max(220, Math.min(520, Math.abs(target - from) * 10));
+  const duration = Math.max(480, Math.min(1400, Math.abs(target - from) * 18));
   const startedAt = performance.now();
 
   const tick = (now) => {

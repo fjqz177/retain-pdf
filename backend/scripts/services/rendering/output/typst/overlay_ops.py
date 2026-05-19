@@ -22,6 +22,8 @@ from services.rendering.output.typst.source_page_overlay import apply_source_pag
 from services.rendering.output.typst.source_page_overlay import mark_image_page_overlay_mode
 from services.rendering.output.typst.source_page_overlay import overlay_pages_from_single_pdf
 from services.pipeline_shared.events import emit_stage_progress
+from services.pipeline_shared.events import emit_render_compile_progress
+from services.pipeline_shared.events import emit_render_page_progress
 
 
 _OVERLAY_STEM_RE = re.compile(r"\bbook-overlay-(\d{3,})\b")
@@ -216,6 +218,7 @@ def overlay_translated_pages_on_doc(
         translated_pages,
         first_line_indent_lookup=first_line_indent_lookup,
         effective_inner_bbox_lookup=effective_inner_bbox_lookup,
+        skip_policy_page_indices=source_text_precleaned_page_indices,
     )
     ordered_page_indices, translated_pages = prepare_overlay_doc_pages(doc, translated_pages)
     prepare_elapsed = time.perf_counter() - prepare_started
@@ -280,12 +283,11 @@ def overlay_translated_pages_on_doc(
     source_prepare_elapsed = time.perf_counter() - source_prepare_started
     compile_started = time.perf_counter()
     try:
-        emit_stage_progress(
-            stage="compile",
+        emit_render_compile_progress(
+            current=1,
+            total=4,
             message=f"正在编译整本 Typst overlay，共 {len(ordered_page_indices)} 页",
-            progress_current=1,
-            progress_total=2,
-            payload={"progress_unit": "step", "render_stage": "typst_book_compile"},
+            payload={"render_stage": "typst_book_compile_start"},
         )
         overlay_pdf = compile_book_overlay_pdf(
             book_specs,
@@ -296,6 +298,12 @@ def overlay_translated_pages_on_doc(
             prebuilt_source_path=active_prebuilt_source_path,
         )
         compile_elapsed = time.perf_counter() - compile_started
+        emit_render_compile_progress(
+            current=4,
+            total=4,
+            message=f"整本 Typst overlay 编译完成，共 {len(ordered_page_indices)} 页",
+            payload={"render_stage": "typst_book_compile_done"},
+        )
         page_size_mismatches = _overlay_pdf_size_mismatches(doc, ordered_page_indices, overlay_pdf)
         if page_size_mismatches:
             print(
@@ -413,25 +421,22 @@ def overlay_translated_pages_on_doc(
                 str(page_specs[index][0] + 1) for index in sorted(failed_overlay_indices)
             )
             print(f"typst targeted sanitize pages={failed_pages_text}", flush=True)
-            emit_stage_progress(
-                stage="compile",
+            emit_render_compile_progress(
+                current=1,
+                total=max(len(failed_overlay_indices), 1),
                 message=f"整本 Typst 编译失败，优先修复不兼容页面：第 {failed_pages_text} 页",
-                progress_current=0,
-                progress_total=len(failed_overlay_indices),
                 payload={
-                    "progress_unit": "page",
                     "render_stage": "typst_targeted_sanitize",
                     "candidate_pages": [page_specs[index][0] for index in sorted(failed_overlay_indices)],
                 },
             )
         else:
             print("typst compile failure page unknown; sanitizing all pages", flush=True)
-        emit_stage_progress(
-            stage="compile",
+        emit_render_compile_progress(
+            current=2,
+            total=4,
             message="整本 Typst 编译失败，开始检查不兼容页面",
-            progress_current=2,
-            progress_total=2,
-            payload={"progress_unit": "step", "render_stage": "typst_book_compile_failed"},
+            payload={"render_stage": "typst_book_compile_failed"},
         )
         compile_errors = [exc.to_dict() if isinstance(exc, TypstCompileError) else str(exc)]
 
@@ -448,17 +453,22 @@ def overlay_translated_pages_on_doc(
         overlay_indices=failed_overlay_indices or None,
     )
     sanitize_elapsed = time.perf_counter() - sanitize_started
+    emit_render_compile_progress(
+        current=3,
+        total=4,
+        message="Typst 不兼容页面检查完成",
+        payload={"render_stage": "typst_sanitize_done"},
+    )
     sanitized_compile_started = time.perf_counter()
     sanitized_compile_elapsed = 0.0
     retry_sanitized_book_compile = len(ordered_page_indices) <= 120 or 0 < len(failed_overlay_indices) <= 8
     if retry_sanitized_book_compile:
         try:
-            emit_stage_progress(
-                stage="compile",
+            emit_render_compile_progress(
+                current=3,
+                total=4,
                 message="正在重新编译修复后的整本 Typst overlay",
-                progress_current=1,
-                progress_total=2,
-                payload={"progress_unit": "step", "render_stage": "typst_sanitized_book_compile"},
+                payload={"render_stage": "typst_sanitized_book_compile_start"},
             )
             overlay_pdf = compile_book_overlay_pdf(
                 sanitized_book_specs,
@@ -468,6 +478,12 @@ def overlay_translated_pages_on_doc(
                 temp_root=temp_root,
             )
             sanitized_compile_elapsed = time.perf_counter() - sanitized_compile_started
+            emit_render_compile_progress(
+                current=4,
+                total=4,
+                message=f"修复后的整本 Typst overlay 编译完成，共 {len(ordered_page_indices)} 页",
+                payload={"render_stage": "typst_sanitized_book_compile_done"},
+            )
             if (
                 source_base_pdf_path is not None
                 and pikepdf_output_pdf_path is not None
@@ -547,13 +563,23 @@ def overlay_translated_pages_on_doc(
             "falling back to per-page compilation",
             flush=True,
         )
-        emit_stage_progress(
-            stage="compile",
+        emit_render_page_progress(
+            current=0,
+            total=len(ordered_page_indices),
             message=f"大文档跳过整本重编译，改为逐页编译 {len(ordered_page_indices)} 页",
-            progress_current=0,
-            progress_total=len(ordered_page_indices),
-            payload={"progress_unit": "page", "render_stage": "large_doc_page_overlay_compile"},
+            payload={"render_stage": "large_doc_page_overlay_compile"},
         )
+
+    fallback_apply_source_overlay = apply_source_overlay
+    if _can_use_pikepdf_book_overlay(
+        apply_source_overlay=False,
+        use_typst_overlay_fill_only=use_typst_overlay_fill_only,
+        source_cleanup_strategy=source_cleanup_strategy,
+        source_text_precleaned_page_indices=source_text_precleaned_page_indices,
+        ordered_page_indices=ordered_page_indices,
+        translated_pages=sanitized_translated_pages,
+    ):
+        fallback_apply_source_overlay = False
 
     diagnostics = overlay_pages_via_page_fallback(
         doc,
@@ -568,7 +594,7 @@ def overlay_translated_pages_on_doc(
         font_paths=font_paths,
         temp_root=temp_root,
         cover_only=cover_only,
-        apply_source_overlay=apply_source_overlay,
+        apply_source_overlay=fallback_apply_source_overlay,
         redaction_strategy=redaction_strategy,
         source_base_pdf_path=source_base_pdf_path,
         pikepdf_output_pdf_path=pikepdf_output_pdf_path,

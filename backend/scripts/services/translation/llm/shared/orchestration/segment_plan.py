@@ -7,45 +7,39 @@ from services.translation.llm.validation.english_residue import normalize_inline
 from services.translation.llm.validation.placeholder_tokens import strip_placeholders
 
 
-_OPTIONAL_CONNECTOR_SEGMENTS = {
+_OPTIONAL_EMPTY_SEGMENTS: set[str] = set()
+
+_MICRO_CONNECTOR_SEGMENTS = {
     "a",
     "an",
     "and",
     "as",
     "at",
-    "by",
-    "for",
-    "from",
-    "in",
-    "into",
-    "of",
-    "on",
-    "or",
-    "per",
-    "than",
-    "to",
-    "via",
-    "vs",
-    "with",
-}
-
-_MICRO_CONNECTOR_SEGMENTS = _OPTIONAL_CONNECTOR_SEGMENTS | {
     "also",
     "be",
     "been",
     "being",
     "but",
+    "by",
     "can",
     "could",
     "does",
+    "for",
+    "from",
     "has",
     "have",
     "if",
+    "in",
+    "into",
     "is",
     "it",
     "its",
     "may",
     "might",
+    "of",
+    "on",
+    "or",
+    "per",
     "should",
     "that",
     "the",
@@ -54,8 +48,12 @@ _MICRO_CONNECTOR_SEGMENTS = _OPTIONAL_CONNECTOR_SEGMENTS | {
     "these",
     "this",
     "those",
+    "to",
+    "via",
+    "vs",
     "was",
     "were",
+    "with",
     "which",
     "while",
     "will",
@@ -66,14 +64,7 @@ def is_optional_empty_segment(source_text: str) -> bool:
     normalized = normalize_inline_whitespace(source_text).strip().lower()
     if not normalized:
         return True
-    if len(normalized) > 12:
-        return False
-    words = re.findall(r"[a-z]+", normalized)
-    if not words or len(words) > 2:
-        return False
-    if " ".join(words) != normalized:
-        return False
-    return all(word in _OPTIONAL_CONNECTOR_SEGMENTS for word in words)
+    return normalized in _OPTIONAL_EMPTY_SEGMENTS
 
 
 def segment_context_text(text: str, *, limit: int = 280) -> str:
@@ -125,7 +116,7 @@ def is_micro_formula_segment(text: str) -> bool:
     words = _segment_word_tokens(normalized)
     if not words:
         return True
-    if len(words) <= 2 and len(normalized) <= 20:
+    if len(words) <= 2 and len(normalized) <= 20 and all(word in _MICRO_CONNECTOR_SEGMENTS for word in words):
         return True
     if len(words) <= 3 and len(normalized) <= 24 and (
         words[0] in _MICRO_CONNECTOR_SEGMENTS or words[-1] in _MICRO_CONNECTOR_SEGMENTS

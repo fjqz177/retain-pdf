@@ -27,7 +27,7 @@ from services.translation.item_reader import item_block_kind
 RENDER_PREWARM_DIR_NAME = "render_prewarm"
 RENDER_PREWARM_MANIFEST_NAME = "render_source_prewarm_manifest.json"
 RENDER_PREWARM_SCHEMA = "render_source_prewarm_v1"
-BBOX_TEXT_STRIP_ALGORITHM_VERSION = "bbox_text_strip_v10_formula_guarded_pages"
+BBOX_TEXT_STRIP_ALGORITHM_VERSION = "bbox_text_strip_v11_formula_neighbors_deletable"
 HIDDEN_TEXT_STRIP_ALGORITHM_VERSION = "hidden_text_strip_v1"
 IMAGE_COMPRESSION_ALGORITHM_VERSION = "image_only_compress_v1"
 FIRST_LINE_INDENT_ALGORITHM_VERSION = "first_line_indent_v1"
@@ -386,9 +386,7 @@ def _build_payload_prewarm(
     source_cleanup_strategy: str = "pikepdf_text_strip",
 ) -> dict[str, Any]:
     started = time.perf_counter()
-    prepared_pages = apply_render_pages_policy_fields(
-        prepare_render_payloads_by_page(translated_pages, source_pdf_path=source_pdf_path)
-    )
+    prepared_pages = prepare_render_payloads_by_page(translated_pages, source_pdf_path=source_pdf_path)
     first_line_indent_by_item_id: dict[str, float] = {}
     effective_inner_bbox_by_item_id: dict[str, list[float]] = {}
     for items in prepared_pages.values():

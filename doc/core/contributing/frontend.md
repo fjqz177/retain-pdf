@@ -14,6 +14,15 @@ cd frontend
 python3 -m http.server 40001 --bind 0.0.0.0
 ```
 
+React 迁移区如需单独启动：
+
+```bash
+cd frontend-react
+npm run dev
+```
+
+默认端口：`40002`。该入口仍是迁移区，不直接替代生产 `frontend/`。
+
 默认端口：
 
 - Web 前端：`40001`

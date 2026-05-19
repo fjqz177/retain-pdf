@@ -105,7 +105,7 @@ fn mirror_child_event(
 }
 
 fn select_live_stage_snapshot(items: &[JobEventRecord]) -> Option<LiveStageSnapshot> {
-    items
+    let selected = items
         .iter()
         .filter(|item| {
             let event_type = item.event_type.as_deref().map(str::trim).unwrap_or("");
@@ -117,13 +117,36 @@ fn select_live_stage_snapshot(items: &[JobEventRecord]) -> Option<LiveStageSnaps
                 .cmp(&user_stage_rank(right.stage.as_deref()))
                 .then_with(|| left.ts.cmp(&right.ts))
                 .then_with(|| left.seq.cmp(&right.seq))
-        })
-        .map(|item| LiveStageSnapshot {
-            stage: item.stage.clone(),
-            stage_detail: item.stage_detail.clone(),
-            progress_current: item.progress_current,
-            progress_total: item.progress_total,
-        })
+        })?;
+    let fallback_progress = items
+        .iter()
+        .filter(|item| item.progress_current.is_some() || item.progress_total.is_some())
+        .max_by(|left, right| left.ts.cmp(&right.ts).then_with(|| left.seq.cmp(&right.seq)));
+    let selected_stage = selected.stage.as_deref().map(str::trim).unwrap_or("");
+    let progress_stage = fallback_progress
+        .and_then(|item| item.stage.as_deref())
+        .map(str::trim)
+        .unwrap_or("");
+    let should_keep_progress_stage =
+        selected.progress_current.is_none() && selected_stage == "failed" && !progress_stage.is_empty();
+    Some(LiveStageSnapshot {
+        stage: if should_keep_progress_stage {
+            fallback_progress.and_then(|item| item.stage.clone())
+        } else {
+            selected.stage.clone()
+        },
+        stage_detail: if should_keep_progress_stage {
+            fallback_progress.and_then(|item| item.stage_detail.clone())
+        } else {
+            selected.stage_detail.clone()
+        },
+        progress_current: selected
+            .progress_current
+            .or_else(|| fallback_progress.and_then(|item| item.progress_current)),
+        progress_total: selected
+            .progress_total
+            .or_else(|| fallback_progress.and_then(|item| item.progress_total)),
+    })
 }
 
 fn user_stage_rank(stage: Option<&str>) -> i32 {

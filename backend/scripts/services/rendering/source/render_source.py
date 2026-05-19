@@ -8,7 +8,6 @@ from services.rendering.source.compression.pdf_copy import build_image_compresse
 from services.rendering.source.preparation.bbox_text_strip import build_bbox_text_stripped_pdf_copy
 from services.rendering.source.preparation.bbox_text_strip_types import BBoxTextStripCandidates
 from services.rendering.source.preparation.hidden_text_strip import build_hidden_text_stripped_pdf_copy
-from services.rendering.source.preparation.redact_restore_formula import build_redact_restore_formula_pdf_copy
 from services.rendering.output.typst.shared import default_typst_temp_root
 from foundation.config import layout
 
@@ -76,10 +75,12 @@ def build_render_source_pdf(
         )
         print(f"render source pdf: bbox-text strip elapsed={time.perf_counter() - bbox_started:.2f}s", flush=True)
         bbox_text_stripped_page_indices = bbox_text_result.changed_page_indices
-        bbox_text_strip_skipped_page_indices = bbox_text_result.skipped_complex_page_indices
-        source_text_precleaned_page_indices = (
-            bbox_text_result.changed_page_indices | bbox_text_result.skipped_no_text_overlap_page_indices
+        bbox_text_strip_skipped_page_indices = (
+            bbox_text_result.skipped_complex_page_indices
+            | bbox_text_result.skipped_no_text_overlap_page_indices
+            | bbox_text_result.strip_no_effect_page_indices
         )
+        source_text_precleaned_page_indices = bbox_text_result.changed_page_indices
         if bbox_text_result.changed and bbox_text_result.output_pdf_path is not None:
             render_source_path = bbox_text_result.output_pdf_path
             if not artifact_mode:
@@ -90,28 +91,6 @@ def build_render_source_pdf(
             )
         else:
             bbox_text_stripped_path.unlink(missing_ok=True)
-
-    if translated_pages and layout.use_redact_restore_formula_cleanup(source_cleanup_strategy):
-        restore_started = time.perf_counter()
-        restored_source_path = work_root / f"{output_pdf_path.stem}.source-redact-restore-formulas.pdf"
-        restored_result = build_redact_restore_formula_pdf_copy(
-            source_pdf_path=render_source_path,
-            output_pdf_path=restored_source_path,
-            translated_pages=translated_pages,
-        )
-        print(f"render source pdf: redact-restore formulas elapsed={time.perf_counter() - restore_started:.2f}s", flush=True)
-        if restored_result.changed and restored_result.output_pdf_path is not None:
-            render_source_path = restored_result.output_pdf_path
-            bbox_text_stripped_page_indices = restored_result.changed_page_indices
-            source_text_precleaned_page_indices = restored_result.changed_page_indices
-            if not artifact_mode:
-                temp_paths.append(render_source_path)
-            print(
-                f"render source pdf: using redact-restore formula copy {render_source_path}",
-                flush=True,
-            )
-        else:
-            restored_source_path.unlink(missing_ok=True)
 
     if pdf_compress_dpi <= 0:
         return RenderSourcePdf(

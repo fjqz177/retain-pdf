@@ -46,7 +46,10 @@ export function readerDialogTemplate() {
         </div>
         <div id="reader-dialog-loading" class="reader-dialog-loading hidden" aria-live="polite">
           <div class="reader-dialog-loading-card">
-            <div id="reader-dialog-loading-text" class="reader-dialog-loading-text">正在准备对照阅读...</div>
+            <div class="reader-dialog-loading-head">
+              <div id="reader-dialog-loading-text" class="reader-dialog-loading-text">正在准备对照阅读...</div>
+              <div id="reader-dialog-loading-percent" class="reader-dialog-loading-percent">0%</div>
+            </div>
             <div class="reader-dialog-loading-track">
               <span id="reader-dialog-loading-bar" class="reader-dialog-loading-bar"></span>
             </div>

@@ -18,5 +18,7 @@ pub use types::{
     LibraryBookDetailView, LibraryBookListItemView, LibraryBookListView, LibraryDeleteQuery,
     LibraryDeleteResultView, MarkdownArtifactView, NormalizationSummaryView, OcrJobSummaryView,
     PagePreviewQuery, ReaderDocumentMetadataView, ReaderMetadataView, ReaderPageMetadataView,
-    ReaderRegionBoxView, ReaderRegionItemView, ReaderRegionsView, ResourceLinkView,
+    ReaderRegionBoxView, ReaderRegionItemView, ReaderRegionsView, ResourceLinkView, RetryStageKind,
+    RetryStageRequest, RetryStageSubmissionView, StageActionsView, StageRetryActionLinkView,
+    StageRetryActionView,
 };

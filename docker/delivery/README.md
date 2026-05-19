@@ -75,7 +75,7 @@ docker compose version
 
 ```bash
 git clone https://github.com/wxyhgk/retain-pdf.git
-cd retain-pdf
+cd retain-pdf/docker/delivery
 ```
 
 ## 4. 启动服务
@@ -112,7 +112,7 @@ http://127.0.0.1:40001
 - `max_running_jobs`
   后端允许同时运行的任务数上限。
 - `simple_port`
-  简便同步接口在容器内监听的端口，默认 `42000`。对外通常不直接暴露。
+  multipart 扁平字段提交接口在容器内监听的端口，默认 `42000`。对外通常不直接暴露。
 
 ### docker/web.env
 
@@ -139,8 +139,8 @@ http://127.0.0.1:40001
   容器内项目根目录。
 - `RUST_API_ROOT`
   容器内 Rust API 目录。
-- `RUST_API_DATA_DIR`
-  Rust API 运行时数据目录，主要放上传文件、数据库等。
+- `RUST_API_DATA_ROOT`
+  Rust API 运行时数据根目录，主要放上传文件、任务目录、下载缓存和数据库。`RUST_API_DATA_DIR` 仅作为旧别名兼容。
 - `OUTPUT_ROOT`
   任务输出目录。
 - `PYTHON_BIN`
@@ -154,20 +154,20 @@ http://127.0.0.1:40001
 - `RUST_API_PORT`
   完整 API 在容器内监听的端口，默认 `41000`。
 - `RUST_API_SIMPLE_PORT`
-  简便同步接口在容器内监听的端口，默认 `42000`。
+  multipart 扁平字段提交接口在容器内监听的端口，默认 `42000`。
 - `RUST_API_MAX_RUNNING_JOBS`
   最大并发运行任务数。
-- `RUST_API_NORMAL_MAX_BYTES`
-  后端普通上传大小限制。当前交付包写成 `200MB`。
-- `RUST_API_NORMAL_MAX_PAGES`
-  后端普通页数限制。当前交付包写成 `300` 页。
+- `RUST_API_UPLOAD_MAX_BYTES`
+  后端普通上传大小限制，`0` 表示不限制；当前交付包建议写成 `209715200`。
+- `RUST_API_UPLOAD_MAX_PAGES`
+  后端普通上传页数限制，`0` 表示不限制；当前交付包建议写成 `300`。
 
 ## 说明
 
 - 当前 compose 默认暴露：
   - `40001`：前端页面
   - `41000`：完整 Rust API
-  - `42000`：简便同步接口
+  - `42000`：multipart 扁平字段提交接口，只提供 `/health` 和 `POST /api/v1/translate/bundle`
 - 前端通过同源代理访问后端；普通用户通常不需要手工理解 `API Base`
 - 当前主线前端默认 OCR provider 是 `paddle`
 - 页面里显示的大小 / 页数限制来自当前后端运行配置，不应再按旧的 MinerU 固定上游限制理解
@@ -190,8 +190,8 @@ http://127.0.0.1:40001
 也可以这样启动：
 
 ```bash
-APP_IMAGE=wxyhgk/retainpdf-app:latest \
-WEB_IMAGE=wxyhgk/retainpdf-web:latest \
+APP_IMAGE=wxyhgk/retainpdf-app:<version> \
+WEB_IMAGE=wxyhgk/retainpdf-web:<version> \
 docker compose up -d
 ```
 
@@ -328,16 +328,17 @@ curl -X POST -H "X-API-Key: $X_API_KEY" \
   "$HOST/api/v1/jobs/your-job-id/cancel"
 ```
 
-## 简便同步接口
+## multipart 扁平提交接口
 
-如果你不想自己分上传 / 创建任务 / 轮询状态，可以直接调用同步接口。
+如果你不想自己先调用 `/api/v1/uploads`，可以直接上传 PDF 并创建异步任务。
 
 注意：
 
 - 这个接口是由前端同源代理转发的
 - 默认路径是 `/api/v1/translate/bundle`
-- 请求会一直阻塞到任务完成，然后直接返回 ZIP
-- 这是兼容型同步入口；当前正式异步契约仍以 `/api/v1/uploads + /api/v1/jobs` 为主
+- 请求返回 `ApiResponse<JobSubmissionView>`，其中包含 `job_id` 和初始 `status`
+- 接口不会等待 OCR / 翻译 / 渲染完成，也不会直接返回 ZIP
+- 后续仍需轮询 `GET /api/v1/jobs/{job_id}`，完成后再下载 `/api/v1/jobs/{job_id}/download`
 
 ```bash
 curl -X POST "$HOST/api/v1/translate/bundle" \
@@ -351,8 +352,7 @@ curl -X POST "$HOST/api/v1/translate/bundle" \
   -F "model=$MODEL" \
   -F "mode=sci" \
   -F "workers=100" \
-  -F "batch_size=1" \
-  -o result.zip
+  -F "batch_size=1"
 ```
 
 说明：

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from foundation.config import fonts
@@ -12,6 +13,15 @@ from services.rendering.output.typst.sanitize_steps import try_selective_formula
 from services.rendering.output.typst.sanitize_steps import try_selective_llm_repair
 from services.rendering.output.typst.sanitize_steps import try_selective_plain_text
 from services.pipeline_shared.events import emit_stage_progress
+
+
+def _llm_repair_enabled() -> bool:
+    return os.environ.get("RETAIN_RENDER_TYPST_LLM_REPAIR", "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def sanitize_items_for_typst_compile(
@@ -84,26 +94,6 @@ def sanitize_items_for_typst_compile(
                     diagnostics["final_mode"] = "selective_formula_strip"
                 return patched_items
 
-            llm_patched_items = try_selective_llm_repair(
-                page_width,
-                page_height,
-                translated_items,
-                bad_indices,
-                stem=stem,
-                api_key=api_key,
-                model=model,
-                base_url=base_url,
-                font_family=font_family,
-                include_cover_rect=include_cover_rect,
-                font_paths=font_paths,
-                work_dir=work_dir,
-                diagnostics=diagnostics,
-            )
-            if llm_patched_items is not None:
-                if diagnostics is not None:
-                    diagnostics["final_mode"] = "selective_llm_repair"
-                return llm_patched_items
-
             patched_items = try_selective_plain_text(
                 page_width,
                 page_height,
@@ -120,6 +110,29 @@ def sanitize_items_for_typst_compile(
                 if diagnostics is not None:
                     diagnostics["final_mode"] = "selective_plain_text"
                 return patched_items
+
+            if _llm_repair_enabled():
+                llm_patched_items = try_selective_llm_repair(
+                    page_width,
+                    page_height,
+                    translated_items,
+                    bad_indices,
+                    stem=stem,
+                    api_key=api_key,
+                    model=model,
+                    base_url=base_url,
+                    font_family=font_family,
+                    include_cover_rect=include_cover_rect,
+                    font_paths=font_paths,
+                    work_dir=work_dir,
+                    diagnostics=diagnostics,
+                )
+                if llm_patched_items is not None:
+                    if diagnostics is not None:
+                        diagnostics["final_mode"] = "selective_llm_repair"
+                    return llm_patched_items
+            elif diagnostics is not None:
+                diagnostics["selective_llm_repair_skipped"] = "disabled_by_env"
 
         print(f"typst page fallback to plain text: {stem}", flush=True)
         print(str(page_error), flush=True)
@@ -250,6 +263,8 @@ def sanitize_page_specs_for_typst_book_overlay(
             progress_current=page_index + 1,
             progress_total=total_pages,
             payload={
+                "user_stage": "render",
+                "substage": "render_pages",
                 "progress_unit": "page",
                 "render_stage": "typst_sanitize",
                 "page_index": page_idx,

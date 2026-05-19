@@ -30,6 +30,8 @@ from services.rendering.source.dev_overlay.text_draw import _build_direct_draw_t
 from services.rendering.source.dev_overlay.text_draw import _fit_segment_layout
 from services.rendering.layout.payload.suspicious_ocr import detect_and_drop_suspicious_ocr_glued_blocks
 from services.rendering.output.typst.book_renderer import _compile_render_pages_pdf_resilient
+from services.rendering.output.typst.overlay_ops import overlay_translated_pages_on_doc
+from services.rendering.output.typst.book_support import prepare_translated_pages_for_render
 from services.rendering.output.typst.compiler import _resolved_font_paths
 from services.rendering.output.typst.compiler import _resolved_common_root
 from services.rendering.output.typst.compiler import TypstCompileError
@@ -294,6 +296,61 @@ def test_pikepdf_text_strip_allows_book_overlay_pikepdf_merge() -> None:
     )
 
 
+def test_pikepdf_text_strip_compile_fallback_does_not_reenter_source_overlay() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        source_pdf = root / "source.pdf"
+        output_pdf = root / "out.pdf"
+        overlay_pdf = root / "overlay.pdf"
+
+        doc = fitz.open()
+        doc.new_page(width=200, height=300)
+        doc.save(source_pdf)
+        doc.close()
+
+        overlay_doc = fitz.open()
+        overlay_doc.new_page(width=200, height=300)
+        overlay_doc.save(overlay_pdf)
+        overlay_doc.close()
+
+        source_doc = fitz.open(source_pdf)
+        try:
+            with mock.patch(
+                "services.rendering.output.typst.overlay_ops.compile_book_overlay_pdf",
+                side_effect=RuntimeError("book compile failed"),
+            ), mock.patch(
+                "services.rendering.output.typst.page_compile.compile_page_overlay_pdf",
+                return_value=overlay_pdf,
+            ), mock.patch(
+                "services.rendering.output.typst.overlay_book.apply_source_page_overlay",
+            ) as source_overlay_mock:
+                diagnostics = overlay_translated_pages_on_doc(
+                    source_doc,
+                    {
+                        0: [
+                            {
+                                "item_id": "p001-b001",
+                                "bbox": [10.0, 20.0, 180.0, 60.0],
+                                "translated_text": "hello",
+                                "protected_translated_text": "hello",
+                            }
+                        ]
+                    },
+                    stem="book-overlay",
+                    temp_root=root,
+                    source_text_precleaned_page_indices=frozenset({0}),
+                    source_base_pdf_path=source_pdf,
+                    pikepdf_output_pdf_path=output_pdf,
+                    source_cleanup_strategy="pikepdf_text_strip",
+                )
+        finally:
+            source_doc.close()
+
+        source_overlay_mock.assert_not_called()
+        assert diagnostics["mode"] == "page_overlay_fallback_pikepdf"
+        assert output_pdf.exists()
+
+
 def test_typst_render_source_does_not_emit_white_cover_rects() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -533,6 +590,84 @@ def test_sanitize_items_collects_compile_diagnostics() -> None:
     assert diagnostics["probe_failures"][0]["item_id"] == "b1"
 
 
+def test_sanitize_items_uses_llm_repair_after_plain_fallback_fails() -> None:
+    item = {"item_id": "b1", "bbox": [0, 0, 40, 20], "translated_text": "x", "protected_translated_text": "x"}
+
+    def _fake_compile(*args, **kwargs):
+        stem = kwargs.get("stem", "")
+        if stem.endswith("-selective-llm"):
+            return Path("/tmp/llm.pdf")
+        raise TypstCompileError(
+            phase="overlay_page",
+            stem=stem,
+            typ_path=Path(f"/tmp/{stem}.typ"),
+            pdf_path=Path(f"/tmp/{stem}.pdf"),
+            command=["typst", "compile"],
+            return_code=1,
+            stdout="",
+            stderr="bad formula",
+            work_dir=Path("/tmp"),
+        )
+
+    with mock.patch("services.rendering.output.typst.sanitize.compile_typst_overlay_pdf", side_effect=_fake_compile), mock.patch(
+        "services.rendering.output.typst.sanitize_steps.compile_typst_overlay_pdf",
+        side_effect=_fake_compile,
+    ), mock.patch(
+        "services.rendering.output.typst.sanitize_steps.repair_items_with_llm_for_typst",
+        return_value=[{**item, "protected_translated_text": "llm repaired"}],
+    ) as repair_mock:
+        diagnostics: dict = {}
+        sanitized = sanitize_items_for_typst_compile(
+            200.0,
+            300.0,
+            [item],
+            stem="page-000",
+            diagnostics=diagnostics,
+        )
+
+    repair_mock.assert_called_once()
+    assert sanitized[0]["protected_translated_text"] == "llm repaired"
+    assert diagnostics["final_mode"] == "selective_llm_repair"
+    assert "selective_plain_text_error" in diagnostics
+
+
+def test_sanitize_items_can_disable_llm_repair(monkeypatch) -> None:
+    monkeypatch.setenv("RETAIN_RENDER_TYPST_LLM_REPAIR", "0")
+    item = {"item_id": "b1", "bbox": [0, 0, 40, 20], "translated_text": "x", "protected_translated_text": "x"}
+
+    def _fake_compile(*args, **kwargs):
+        stem = kwargs.get("stem", "")
+        if stem.endswith("-plain"):
+            return Path("/tmp/plain.pdf")
+        raise TypstCompileError(
+            phase="overlay_page",
+            stem=stem,
+            typ_path=Path(f"/tmp/{stem}.typ"),
+            pdf_path=Path(f"/tmp/{stem}.pdf"),
+            command=["typst", "compile"],
+            return_code=1,
+            stdout="",
+            stderr="bad formula",
+            work_dir=Path("/tmp"),
+        )
+
+    with mock.patch("services.rendering.output.typst.sanitize.compile_typst_overlay_pdf", side_effect=_fake_compile), mock.patch(
+        "services.rendering.output.typst.sanitize_steps.compile_typst_overlay_pdf",
+        side_effect=_fake_compile,
+    ), mock.patch("services.rendering.output.typst.sanitize_steps.repair_items_with_llm_for_typst") as repair_mock:
+        diagnostics: dict = {}
+        sanitize_items_for_typst_compile(
+            200.0,
+            300.0,
+            [item],
+            stem="page-000",
+            diagnostics=diagnostics,
+        )
+
+    repair_mock.assert_not_called()
+    assert diagnostics["final_mode"] == "selective_plain_text"
+
+
 def test_extract_failed_overlay_indices_from_typst_error() -> None:
     page_specs = [
         (page_idx, 200.0, 300.0, [{"item_id": f"p{page_idx + 1:03d}-b001"}], f"book-overlay-{page_idx:03d}")
@@ -719,6 +854,9 @@ def test_long_plain_fallback_wraps_instead_of_single_line_scaling() -> None:
     assert "scaled-font" not in source
     assert "set par(leading: 0.56em, justify: true)" in source
     assert "h(18.0pt)" in source
+    plain_block_start = source.index("#let rp0_plain_long_0_body")
+    plain_block_end = source.index("#context", plain_block_start)
+    assert "cmarker.render" not in source[plain_block_start:plain_block_end]
 
 
 def test_background_stage_creates_cleaned_pdf() -> None:
@@ -834,6 +972,53 @@ def test_background_stage_uses_visual_cover_for_formula_pages_by_default() -> No
 
         redact_mock.assert_called_once()
         assert redact_mock.call_args.kwargs["strategy"] == "visual_cover"
+
+
+def test_background_stage_skips_old_cleanup_for_precleaned_pages() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        source_pdf = root / "source.pdf"
+        output_pdf = root / "cleaned.pdf"
+
+        doc = fitz.open()
+        page = doc.new_page(width=200, height=300)
+        page.insert_text((20, 40), "already stripped by pikepdf")
+        doc.save(source_pdf)
+        doc.close()
+
+        with mock.patch(
+            "services.rendering.source.background.stage.protect_formula_regions_in_redaction_items",
+        ) as protect_mock, mock.patch(
+            "services.rendering.source.background.stage.redact_source_text_areas",
+        ) as redact_mock:
+            build_clean_background_pdf(
+                source_pdf_path=source_pdf,
+                translated_pages={
+                    0: [
+                        {
+                            "item_id": "p001-b001",
+                            "block_type": "text",
+                            "block_kind": "text",
+                            "bbox": [10.0, 20.0, 180.0, 60.0],
+                            "translated_text": "hello",
+                            "protected_translated_text": "hello",
+                        },
+                        {
+                            "item_id": "p001-b002",
+                            "block_type": "formula",
+                            "block_kind": "formula",
+                            "normalized_sub_type": "display_formula",
+                            "bbox": [60.0, 70.0, 140.0, 95.0],
+                        },
+                    ]
+                },
+                output_pdf_path=output_pdf,
+                source_text_precleaned_page_indices=frozenset({0}),
+            )
+
+        protect_mock.assert_not_called()
+        redact_mock.assert_not_called()
+        assert output_pdf.exists()
 
 
 def test_apply_source_page_overlay_uses_cover_only_when_vector_text_detected() -> None:
@@ -1002,6 +1187,35 @@ def test_render_policy_marks_formula_pages_for_visual_cover_and_white_fill() -> 
     assert policy.item_policy("p001-b001").overlay_fill == "white"
     assert item_render_policy(patched[0])["cleanup_mode"] == "visual_cover"
     assert item_uses_white_overlay_fill(patched[0]) is True
+
+
+def test_precleaned_overlay_pages_do_not_get_formula_page_white_fill() -> None:
+    pages = {
+        0: [
+            {
+                "item_id": "p001-b001",
+                "page_idx": 0,
+                "block_type": "text",
+                "block_kind": "text",
+                "bbox": [40.0, 40.0, 260.0, 70.0],
+                "protected_translated_text": "上文",
+            },
+            {
+                "item_id": "p001-b002",
+                "page_idx": 0,
+                "block_type": "formula",
+                "block_kind": "formula",
+                "normalized_sub_type": "display_formula",
+                "bbox": [96.0, 76.0, 224.0, 104.0],
+            },
+        ]
+    }
+
+    prepared = prepare_translated_pages_for_render(None, pages, skip_policy_page_indices=frozenset({0}))
+    source = build_typst_overlay_source(300.0, 400.0, prepared[0])
+
+    assert item_uses_white_overlay_fill(prepared[0][0]) is False
+    assert "fill: rgb(255, 255, 255)" not in source
 
 
 def test_display_formula_neighbors_use_visual_cover_policy() -> None:
@@ -2624,7 +2838,7 @@ def test_background_render_resilient_compile_sanitizes_on_failure() -> None:
             "services.rendering.output.typst.book_renderer.sanitize_page_specs_for_typst_book_background",
             return_value=[(0, 200.0, 300.0, sanitized_pages[0])],
         ):
-            result = _compile_render_pages_pdf_resilient(
+            result, diagnostics = _compile_render_pages_pdf_resilient(
                 source_pdf_path=source_pdf,
                 background_pdf_path=background_pdf,
                 translated_pages=translated_pages,
@@ -2633,6 +2847,9 @@ def test_background_render_resilient_compile_sanitizes_on_failure() -> None:
             )
 
         assert result == root / "sanitized.pdf"
+        assert diagnostics["background_compile_retried"] is True
+        assert diagnostics["background_compile_failed"] is True
+        assert "background_sanitize_elapsed_seconds" in diagnostics
         assert compile_mock.call_count == 2
         assert compile_mock.call_args_list[1].kwargs["stem"] == "book-background-overlay-sanitized"
 
@@ -3049,6 +3266,74 @@ def test_bbox_text_strip_accepts_untranslated_template_source_text() -> None:
         assert "outside source" in text
 
 
+def test_bbox_text_strip_skips_page_when_text_bbox_overlaps_vector_line() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        source_pdf = root / "source.pdf"
+        output_pdf = root / "stripped.pdf"
+        doc = fitz.open()
+        page = doc.new_page(width=200, height=200)
+        page.insert_text((20, 40), "inside text", fontsize=12)
+        page.draw_line((12, 45), (150, 45), color=(0, 0, 0), width=1)
+        doc.save(source_pdf)
+        doc.close()
+
+        result = build_bbox_text_stripped_pdf_copy(
+            source_pdf_path=source_pdf,
+            output_pdf_path=output_pdf,
+            translated_pages={
+                0: [
+                    {
+                        "block_kind": "text",
+                        "bbox": [10.0, 20.0, 160.0, 60.0],
+                        "protected_translated_text": "译文",
+                    }
+                ]
+            },
+        )
+
+        assert result.changed is False
+        assert output_pdf.exists() is False
+        assert result.skipped_complex_page_indices == frozenset({0})
+
+
+def test_bbox_text_strip_keeps_fast_path_when_vector_line_is_outside_text_bbox() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        source_pdf = root / "source.pdf"
+        output_pdf = root / "stripped.pdf"
+        doc = fitz.open()
+        page = doc.new_page(width=200, height=200)
+        page.insert_text((20, 40), "inside text", fontsize=12)
+        page.draw_line((12, 120), (150, 120), color=(0, 0, 0), width=1)
+        doc.save(source_pdf)
+        doc.close()
+
+        result = build_bbox_text_stripped_pdf_copy(
+            source_pdf_path=source_pdf,
+            output_pdf_path=output_pdf,
+            translated_pages={
+                0: [
+                    {
+                        "block_kind": "text",
+                        "bbox": [10.0, 20.0, 160.0, 60.0],
+                        "protected_translated_text": "译文",
+                    }
+                ]
+            },
+        )
+
+        assert result.changed is True
+        assert result.skipped_complex_page_indices == frozenset()
+
+        stripped = fitz.open(output_pdf)
+        try:
+            text = stripped[0].get_text()
+        finally:
+            stripped.close()
+        assert "inside text" not in text
+
+
 def test_bbox_text_strip_skips_formula_pages() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -3085,7 +3370,7 @@ def test_bbox_text_strip_skips_formula_pages() -> None:
         assert result.skipped_complex_page_indices == frozenset({0})
 
 
-def test_redact_restore_formula_uses_pikepdf_text_strip_for_all_rendered_blocks() -> None:
+def test_redact_restore_formula_wrapper_only_marks_changed_pages_precleaned() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         source_pdf = root / "source.pdf"

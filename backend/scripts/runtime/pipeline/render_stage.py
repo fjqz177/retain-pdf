@@ -8,6 +8,7 @@ from runtime.pipeline.render_plan import build_render_plan
 from runtime.pipeline.render_execution import execute_render_plan
 from services.pipeline_shared.events import emit_stage_progress
 from services.pipeline_shared.events import emit_stage_transition
+from services.pipeline_shared.events import reset_render_page_progress
 from services.rendering.source.prewarm import prewarm_manifest_path_from_translations_dir
 from services.rendering.workflow import render_translated_pages_map
 
@@ -139,6 +140,7 @@ def run_render_stage(
         render_mode=render_mode,
         translated_pages_map=translated_pages_map,
     )
+    reset_render_page_progress()
     emit_stage_transition(
         stage="rendering",
         message="开始渲染翻译 PDF",

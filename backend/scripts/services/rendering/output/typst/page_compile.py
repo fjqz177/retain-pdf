@@ -8,7 +8,7 @@ import time
 from foundation.config import fonts
 from services.rendering.output.typst.overlay_compile import compile_page_overlay_pdf
 from services.rendering.output.typst.shared import default_compile_workers
-from services.pipeline_shared.events import emit_stage_progress
+from services.pipeline_shared.events import emit_render_page_progress
 
 OverlayPageSpec = tuple[int, float, float, list[dict], str]
 
@@ -75,13 +75,11 @@ def compile_overlay_page_specs(
             overlay_paths[page_idx] = overlay_path
             page_compile_diagnostics[page_idx] = compile_diag
             completed += 1
-            emit_stage_progress(
-                stage="rendering",
+            emit_render_page_progress(
+                current=completed,
+                total=total_pages,
                 message=f"正在编译页面 overlay，第 {completed}/{total_pages} 页",
-                progress_current=completed,
-                progress_total=total_pages,
                 payload={
-                    "progress_unit": "page",
                     "render_stage": "page_overlay_compile",
                     "page_index": page_idx,
                 },

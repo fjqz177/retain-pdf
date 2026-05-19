@@ -2,6 +2,7 @@ export const JOB_EVENTS_PAGE_SIZE = 200;
 export const JOB_POLL_INTERVAL_MS = 1000;
 export const JOB_EVENTS_REFRESH_MS = 1000;
 export const JOB_MANIFEST_REFRESH_MS = 5000;
+export const JOB_STAGE_ACTIONS_REFRESH_MS = 5000;
 
 export function stopPolling(state) {
   if (state.timer) {
@@ -35,6 +36,10 @@ export function cachedEventsFor(state, jobId) {
 
 export function cachedManifestFor(state, jobId) {
   return state.currentJobManifestJobId === jobId ? state.currentJobManifest : null;
+}
+
+export function cachedStageActionsFor(state, jobId) {
+  return state.currentJobStageActionsJobId === jobId ? state.currentJobStageActions : null;
 }
 
 export function shouldRefreshSecondary(lastFetchedAt, refreshMs, force) {

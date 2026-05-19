@@ -19,10 +19,12 @@ class BBoxTextStripResult:
     text_show_ops_removed: int = 0
     pages_skipped_complex: int = 0
     pages_skipped_no_text_overlap: int = 0
+    pages_strip_no_effect: int = 0
     forms_changed: int = 0
     changed_page_indices: frozenset[int] = frozenset()
     skipped_complex_page_indices: frozenset[int] = frozenset()
     skipped_no_text_overlap_page_indices: frozenset[int] = frozenset()
+    strip_no_effect_page_indices: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True)

@@ -31,7 +31,7 @@ def test_auto_preserve_terms_keeps_hyphenated_scientific_names() -> None:
     assert "The" not in by_source
 
 
-def test_execution_plan_injects_auto_preserve_glossary(tmp_path: Path) -> None:
+def test_execution_plan_uses_only_explicit_glossary_entries(tmp_path: Path) -> None:
     source_json = tmp_path / "document.v1.json"
     source_json.write_text(
         json.dumps(
@@ -113,8 +113,7 @@ def test_execution_plan_injects_auto_preserve_glossary(tmp_path: Path) -> None:
     )
     sources = {entry.source: entry for entry in plan.glossary_entries}
 
-    assert sources["Hartree-Fock"].target == "Hartree-Fock"
-    assert sources["Hartree-Fock"].level == "preserve"
     assert sources["SCF"].target == "自洽场"
     assert sources["SCF"].level == "preferred"
+    assert "Hartree-Fock" not in sources
     assert plan.translation_context.glossary_entries == plan.glossary_entries

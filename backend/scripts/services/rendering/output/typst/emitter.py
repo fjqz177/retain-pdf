@@ -9,6 +9,7 @@ from services.rendering.layout.model.models import RenderPageSpec
 from services.rendering.output.typst import block_config as typst_config
 from services.rendering.output.typst.fit_helpers import page_spec_fit_helpers
 from services.rendering.output.typst.block_renderer import build_typst_block
+from services.pipeline_shared.events import emit_render_page_progress
 
 
 def build_typst_source_from_page_specs(
@@ -25,6 +26,7 @@ def build_typst_source_from_page_specs(
     lines.extend(typst_config.typst_package_imports())
     lines.extend(page_spec_fit_helpers())
 
+    total_pages = len(page_specs)
     for page_offset, spec in enumerate(page_specs):
         lines.append(f"#set page(width: {spec.page_width_pt}pt, height: {spec.page_height_pt}pt, margin: 0pt, fill: none)")
         lines.append(
@@ -35,4 +37,14 @@ def build_typst_source_from_page_specs(
             lines.append(build_typst_block(block_id, layout_block_to_render_block(block), include_fill=False))
         if page_offset + 1 < len(page_specs):
             lines.append("#pagebreak()")
+        emit_render_page_progress(
+            current=page_offset + 1,
+            total=total_pages,
+            message=f"正在生成 Typst 页面，第 {page_offset + 1}/{total_pages} 页",
+            payload={
+                "render_stage": "typst_source_build",
+                "page_index": spec.page_index,
+                "substage": "render_pages",
+            },
+        )
     return "\n".join(lines) + "\n"

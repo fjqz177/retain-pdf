@@ -3,6 +3,7 @@ from __future__ import annotations
 import fitz
 
 from services.rendering.source.preparation.bbox_text_strip_page_probe import page_content_stream_too_large
+from services.rendering.source.preparation.bbox_text_strip_page_probe import page_has_vector_overlap_in_text_rects
 from services.rendering.source.preparation.bbox_text_strip_page_probe import page_has_text_overlap
 from services.rendering.source.preparation.bbox_text_strip_policy_adapter import should_skip_page_for_bbox_text_strip
 from services.rendering.source.preparation.bbox_text_strip_types import BBOX_TEXT_STRIP_PAGE_SKIP_COMPLEX
@@ -29,6 +30,8 @@ def bbox_text_strip_page_skip_reason(
     if not source_item_rects:
         return BBOX_TEXT_STRIP_PAGE_SKIP_NONE
     if page_content_stream_too_large(doc, page):
+        return BBOX_TEXT_STRIP_PAGE_SKIP_COMPLEX
+    if page_has_vector_overlap_in_text_rects(page, source_item_rects):
         return BBOX_TEXT_STRIP_PAGE_SKIP_COMPLEX
     if not page_has_text_overlap(page, source_item_rects):
         return BBOX_TEXT_STRIP_PAGE_SKIP_NO_TEXT_OVERLAP

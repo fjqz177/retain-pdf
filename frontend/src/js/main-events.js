@@ -47,6 +47,9 @@ export function bindMainEvents({
     statusDetailFeature,
   });
   $("back-home-btn")?.addEventListener("click", () => jobRuntimeFeature?.returnToHome());
+  document.addEventListener("retainpdf:retry-stage", (event) => {
+    void jobRuntimeFeature?.retryStage(event.detail?.stage);
+  });
   $("open-output-btn")?.addEventListener("click", () => {
     void appActionsFeature?.handleOpenOutputDir();
   });

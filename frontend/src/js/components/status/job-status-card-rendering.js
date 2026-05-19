@@ -24,6 +24,7 @@ export function setProgress(host, {
   fallbackText = "-",
   percent = NaN,
   progressText = "",
+  progressUnit = "",
   stageKey = "",
   forceVisible = null,
   indeterminate = false,
@@ -46,6 +47,7 @@ export function setProgress(host, {
   const numericCurrent = Number(current);
   const numericTotal = Number(total);
   const numericPercent = Number(percent);
+  const normalizedProgressUnit = `${progressUnit || ""}`.trim();
   bar.classList.toggle("is-indeterminate", Boolean(indeterminate));
   if (indeterminate) {
     bar.style.width = "42%";
@@ -53,6 +55,12 @@ export function setProgress(host, {
     return;
   }
   const hasNumbers = Number.isFinite(numericCurrent) && Number.isFinite(numericTotal) && numericTotal > 0;
+  if (hasNumbers && normalizedProgressUnit === "percent") {
+    const safePercent = Math.max(0, Math.min(100, (numericCurrent / numericTotal) * 100));
+    bar.style.width = `${safePercent}%`;
+    text.textContent = progressText || `进度 ${safePercent.toFixed(0)}%`;
+    return;
+  }
   if (!hasNumbers) {
     if (Number.isFinite(numericPercent)) {
       const safePercent = Math.max(0, Math.min(100, numericPercent));
@@ -65,7 +73,7 @@ export function setProgress(host, {
     return;
   }
   const computedPercent = (numericCurrent / numericTotal) * 100;
-  const safePercent = Math.max(0, Math.min(100, Number.isFinite(numericPercent) ? numericPercent : computedPercent));
+  const safePercent = Math.max(0, Math.min(100, computedPercent));
   bar.style.width = `${safePercent}%`;
   text.textContent = progressText || `${numericCurrent} / ${numericTotal} (${safePercent.toFixed(0)}%)`;
 }

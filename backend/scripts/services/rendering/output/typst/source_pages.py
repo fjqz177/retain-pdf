@@ -9,6 +9,7 @@ from services.rendering.layout.model.models import RenderBlock
 from services.rendering.layout.payload.blocks import build_render_blocks
 from services.rendering.output.typst import block_config as typst_config
 from services.rendering.output.typst.fit_helpers import render_block_fit_helpers
+from services.pipeline_shared.events import emit_render_page_progress
 
 
 BuildTypstBlockFn = Callable[[str, RenderBlock], str]
@@ -84,6 +85,12 @@ def build_book_overlay_source_lines(
             translated_items=translated_items,
             block_builder=block_builder,
         )
+        emit_render_page_progress(
+            current=page_index + 1,
+            total=page_count,
+            message=f"正在生成整本 Typst overlay，第 {page_index + 1}/{page_count} 页",
+            payload={"render_stage": "whole_book_overlay_source_build", "page_index": page_index},
+        )
     return lines
 
 
@@ -109,6 +116,12 @@ def build_book_background_source_lines(
             page_height=page_height,
             translated_items=translated_items,
             block_builder=block_builder,
+        )
+        emit_render_page_progress(
+            current=page_index + 1,
+            total=page_count,
+            message=f"正在生成整本 Typst 背景渲染，第 {page_index + 1}/{page_count} 页",
+            payload={"render_stage": "whole_book_background_source_build", "page_index": source_page_idx},
         )
     return lines
 

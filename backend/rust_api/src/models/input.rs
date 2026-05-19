@@ -26,7 +26,7 @@ mod tests {
                 "base_url": "https://api.deepseek.com/v1",
                 "api_key": "sk-test"
             },
-            "render": { "render_mode": "auto" },
+            "render": { "render_mode": "typst" },
             "runtime": { "job_id": "job-1", "timeout_seconds": 1200 }
         }))
         .expect("parse grouped payload");
@@ -37,7 +37,7 @@ mod tests {
         assert_eq!(input.translation.model, "deepseek-v4-flash");
         assert_eq!(input.translation.base_url, "https://api.deepseek.com/v1");
         assert_eq!(input.translation.api_key, "sk-test");
-        assert_eq!(input.render.render_mode, "auto");
+        assert_eq!(input.render.render_mode, "typst");
         assert_eq!(input.runtime.job_id, "job-1");
         assert_eq!(input.runtime.timeout_seconds, 1200);
     }
@@ -51,7 +51,7 @@ mod tests {
             "base_url": "https://api.deepseek.com/v1",
             "api_key": "sk-legacy",
             "mineru_token": "mineru-legacy",
-            "render_mode": "auto",
+            "render_mode": "typst",
             "job_id": "job-legacy"
         }))
         .expect_err("legacy payload should be rejected");
@@ -65,7 +65,7 @@ mod tests {
         let input = CreateJobInput::from_api_value(json!({
             "workflow": "render",
             "source": { "artifact_job_id": "job-prev" },
-            "render": { "render_mode": "auto" }
+            "render": { "render_mode": "typst" }
         }))
         .expect("parse render payload");
 
@@ -129,7 +129,7 @@ mod tests {
         let render = CreateJobInput::from_api_value(json!({
             "workflow": "render",
             "source": { "artifact_job_id": "job-prev" },
-            "render": { "render_mode": "auto" }
+            "render": { "render_mode": "typst" }
         }))
         .expect("parse render payload");
         assert_eq!(render.workflow, WorkflowKind::Render);

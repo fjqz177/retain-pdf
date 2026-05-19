@@ -68,6 +68,7 @@ def prepare_translated_pages_for_render(
     *,
     first_line_indent_lookup: dict[str, float] | None = None,
     effective_inner_bbox_lookup: dict[str, list[float]] | None = None,
+    skip_policy_page_indices: frozenset[int] = frozenset(),
 ) -> dict[int, list[dict]]:
     prepared_pages = prepare_render_payloads_by_page(
         translated_pages,
@@ -75,7 +76,12 @@ def prepare_translated_pages_for_render(
         first_line_indent_lookup=first_line_indent_lookup,
         effective_inner_bbox_lookup=effective_inner_bbox_lookup,
     )
-    return apply_render_pages_policy_fields(prepared_pages)
+    if not skip_policy_page_indices:
+        return apply_render_pages_policy_fields(prepared_pages)
+    return {
+        page_idx: items if page_idx in skip_policy_page_indices else apply_render_page_policy_fields(items)
+        for page_idx, items in prepared_pages.items()
+    }
 
 
 def compile_background_pdf_resilient(

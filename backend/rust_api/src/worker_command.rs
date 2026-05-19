@@ -259,7 +259,7 @@ mod tests {
         input.translation.model = "deepseek-v4-flash".to_string();
         input.translation.base_url = "https://api.deepseek.com/v1".to_string();
         input.translation.workers = 3;
-        input.render.render_mode = "auto".to_string();
+        input.render.render_mode = "typst".to_string();
         input.render.translated_pdf_name = "out.pdf".to_string();
         ResolvedJobSpec::from_input(input)
     }
@@ -362,7 +362,7 @@ mod tests {
         assert_eq!(payload["stage"], "render");
         assert_eq!(payload["inputs"]["source_pdf"], "/tmp/source.pdf");
         assert_eq!(payload["inputs"]["translations_dir"], "/tmp/translated");
-        assert_eq!(payload["params"]["render_mode"], "auto");
+        assert_eq!(payload["params"]["render_mode"], "typst");
         assert_eq!(
             payload["params"]["credential_ref"],
             format!("env:{TRANSLATION_API_KEY_ENV_NAME}")

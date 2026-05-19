@@ -126,8 +126,8 @@ docker compose up -d
 
 ```bash
 cd retain-pdf/docker/delivery
-APP_IMAGE=wxyhgk/retainpdf-app:latest \
-WEB_IMAGE=wxyhgk/retainpdf-web:latest \
+APP_IMAGE=wxyhgk/retainpdf-app:<version> \
+WEB_IMAGE=wxyhgk/retainpdf-web:<version> \
 docker compose up -d
 ```
 
@@ -169,35 +169,46 @@ docker compose ps
 ### 代码与子模块说明
 
 - [后端脚本说明](backend/scripts/README.md)
-- `frontend/`：当前浏览器前端静态资源与桌面端打包输入目录
+- `frontend/`：当前生产使用的静态浏览器前端，也是桌面端 bundle 的输入目录。
+- `frontend-react/`：React 前端迁移区，当前不直接替代 `frontend/`。
+- `desktop/`：Electron 桌面端打包与运行壳。
 
 ### 当前目录结构
 
 - `frontend/`
-  浏览器前端、桌面壳、预览实验页面。
+  当前生产使用的静态浏览器前端。
+- `frontend-react/`
+  React 前端迁移区。
+- `desktop/`
+  Electron 桌面端打包、运行壳和桌面端前端 bundle。
 - `backend/`
   Rust API、Python 脚本、嵌入式 Python、历史工作区。
 - `docker/`
   Dockerfile、发布脚本、交付用 compose 配置。
+- `experiments/`
+  独立实验、验证记录和临时 POC。
 - `data/`
   本地运行输出、任务目录、历史样本数据。
 - `resources/`
   仓库级品牌图、README 展示图、动画、示例文件和后续本地 runtime 归档入口。
 
-### 当前工程判断
+### 当前开发状态
 
-RetainPDF 目前已经可以完成从 PDF 上传、OCR、翻译、排版重建到产物下载的完整链路。
+RetainPDF 目前已经形成完整产品链路：
 
-接下来我的重点不是盲目堆功能，而是继续把下面几件事做稳：
+- Rust API 负责上传、任务、图书馆、事件、产物、断点恢复和 Provider 调度。
+- Python pipeline 负责 OCR 归一化、翻译、诊断、渲染和 PDF 处理。
+- 静态前端是当前生产入口，React 前端仍在迁移区。
+- Docker 和桌面端是当前主要交付形态。
+- API、数据库、artifact、reader、glossary 和 stage spec 已有主线文档维护。
 
-- 工程一致性
-- API 与产物契约稳定性
-- 构建可复现性
-- 长文块与公式场景下的翻译稳定性
+当前开发优先级以主线契约为准，主要集中在：
 
-如果你想了解我接下来准备怎么推进，可以看：
-
-- [工程评价与后续执行计划](doc/ops/planning/工程评价与后续执行计划.md)
+- 前端图书馆、reader、任务进度和术语表体验。
+- Rust API 的边界收口、数据库持久化和 artifact 管理。
+- Python 翻译一致性、公式保护、渲染稳定性和诊断能力。
+- Docker、桌面端、CI 和测试样本的可复现交付。
+- 文档与真实 API / 配置 / 目录结构保持同步。
 
 ### 欢迎一起参与
 

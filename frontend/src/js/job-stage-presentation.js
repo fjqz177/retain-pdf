@@ -138,22 +138,44 @@ function progressFromEvent(event) {
   const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
   const current = firstNumber(
     event?.progress_current,
+    event?.progress?.current,
+    event?.current,
     payload.progress_current,
     payload.progress?.current,
+    payload.render?.progress_current,
+    payload.render?.current,
     payload.current,
     payload.current_page,
+    payload.page_current,
+    payload.currentPage,
     payload.extracted_pages,
     payload.extractedPages,
+    payload.rendered_pages,
+    payload.renderedPages,
+    payload.completed_pages,
+    payload.completedPages,
+    payload.finished_pages,
+    payload.finishedPages,
+    payload.pages_done,
+    payload.pagesDone,
     payload.page_number,
     payload.page,
   );
   const total = firstNumber(
     event?.progress_total,
+    event?.progress?.total,
+    event?.total,
     payload.progress_total,
     payload.progress?.total,
+    payload.render?.progress_total,
+    payload.render?.total,
     payload.total,
     payload.total_pages,
     payload.totalPages,
+    payload.page_total,
+    payload.pageTotal,
+    payload.num_pages,
+    payload.numPages,
     payload.page_count,
     payload.pages,
   );
@@ -181,8 +203,11 @@ function progressPercentFromEvent(event) {
   const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
   return firstNumber(
     event?.progress_percent,
+    event?.progress?.percent,
     payload.progress_percent,
     payload.progress?.percent,
+    payload.render?.progress_percent,
+    payload.render?.percent,
     event?.percent,
     payload.percent,
   );
@@ -319,7 +344,101 @@ function normalizeProgressRecord(job, item, itemStage) {
   };
 }
 
+function compositeRenderProgressFromEvents(job, eventsPayload, fallbackProgress = null) {
+  const items = Array.isArray(eventsPayload?.items) ? eventsPayload.items : [];
+  let latestPrepareProgress = null;
+  let latestPageProgress = null;
+  let latestCompileProgress = null;
+  for (const item of items) {
+    const itemStage = `${item?.stage || item?.provider_stage || item?.user_stage || item?.payload?.user_stage || ""}`.trim();
+    if (!itemStage) {
+      continue;
+    }
+    const next = normalizeProgressRecord(job, item, itemStage);
+    if (!next || next.stageKey !== "render") {
+      continue;
+    }
+    if (next.substageKey === "render_prepare" && next.progressUnit === "step" && shouldReplaceCurrentStageProgress(latestPrepareProgress, next)) {
+      latestPrepareProgress = next;
+    }
+    if (next.progressUnit === "page" && shouldReplaceCurrentStageProgress(latestPageProgress, next)) {
+      latestPageProgress = next;
+    }
+    if (next.substageKey === "render_compile" && next.progressUnit === "step" && shouldReplaceCurrentStageProgress(latestCompileProgress, next)) {
+      latestCompileProgress = next;
+    }
+  }
+  const latest = latestCompileProgress || latestPageProgress || latestPrepareProgress || fallbackProgress;
+  if (!latest) {
+    return null;
+  }
+  if (
+    latestCompileProgress
+    && latestCompileProgress.current !== null
+    && latestCompileProgress.total !== null
+    && latestCompileProgress.total > 0
+  ) {
+    const compileRatio = Math.max(0, Math.min(1, latestCompileProgress.current / latestCompileProgress.total));
+    return {
+      ...latestCompileProgress,
+      current: 80 + Math.round(compileRatio * 20),
+      total: 100,
+      progressUnit: "percent",
+      progressText: latestCompileProgress.payload?.stage_detail || latestCompileProgress.progressText || `编译 ${latestCompileProgress.current}/${latestCompileProgress.total}`,
+      payload: {
+        ...latestCompileProgress.payload,
+        progress_unit: "percent",
+      },
+      indeterminate: false,
+    };
+  }
+  if (
+    latestPageProgress
+    && latestPageProgress.current !== null
+    && latestPageProgress.total !== null
+    && latestPageProgress.total > 0
+  ) {
+    const pageRatio = Math.max(0, Math.min(1, latestPageProgress.current / latestPageProgress.total));
+    return {
+      ...latestPageProgress,
+      current: 10 + Math.round(pageRatio * 70),
+      total: 100,
+      progressUnit: "percent",
+      progressText: latestPageProgress.progressText,
+      payload: {
+        ...latestPageProgress.payload,
+        progress_unit: "percent",
+      },
+      indeterminate: latestPageProgress.current <= 0,
+    };
+  }
+  if (
+    latestPrepareProgress
+    && latestPrepareProgress.current !== null
+    && latestPrepareProgress.total !== null
+    && latestPrepareProgress.total > 0
+  ) {
+    const prepareRatio = Math.max(0, Math.min(1, latestPrepareProgress.current / latestPrepareProgress.total));
+    return {
+      ...latestPrepareProgress,
+      current: Math.round(prepareRatio * 10),
+      total: 100,
+      progressUnit: "percent",
+      progressText: latestPrepareProgress.payload?.stage_detail || latestPrepareProgress.progressText || `准备 ${latestPrepareProgress.current}/${latestPrepareProgress.total}`,
+      payload: {
+        ...latestPrepareProgress.payload,
+        progress_unit: "percent",
+      },
+      indeterminate: latestPrepareProgress.current <= 0,
+    };
+  }
+  return latest;
+}
+
 function collectLatestCurrentStageProgress(job, eventsPayload, stageKey = "", substageKey = "") {
+  if (stageKey === "render") {
+    return compositeRenderProgressFromEvents(job, eventsPayload);
+  }
   const items = Array.isArray(eventsPayload?.items) ? eventsPayload.items : [];
   let latest = null;
   let latestSameSubstage = null;
@@ -384,6 +503,10 @@ export function collectStageProgressByKey(job, eventsPayload) {
       bySubstage,
     };
   });
+  const renderCompositeProgress = compositeRenderProgressFromEvents(job, eventsPayload, progressByKey.render);
+  if (renderCompositeProgress) {
+    progressByKey.render = renderCompositeProgress;
+  }
   return progressByKey;
 }
 
@@ -461,6 +584,7 @@ export function resolveDisplayedStagePresentation(job, eventsPayload) {
   const latestProgressPayload = latestCurrentProgress
     ? {
         ...latestCurrentProgress.payload,
+        progress_unit: latestCurrentProgress.progressUnit || latestCurrentProgress.payload?.progress_unit || "",
         progress_current: latestCurrentProgress.current,
         progress_total: latestCurrentProgress.total,
       }
@@ -469,9 +593,13 @@ export function resolveDisplayedStagePresentation(job, eventsPayload) {
   const currentVisualPayload = latestProgressPayload || eventPayload;
   const currentSubstagePayload = latestProgressPayload || eventPayload;
   const currentProgressIndeterminate = latestCurrentProgress
-    ? latestCurrentProgress.current === null
-      && latestCurrentProgress.total !== null
-      && stageKey === "ocr"
+    ? (
+        latestCurrentProgress.total !== null
+        && (
+          (stageKey === "ocr" && latestCurrentProgress.current === null)
+          || (stageKey === "render" && latestCurrentProgress.current === 0)
+        )
+      )
     : eventProgress.current === null && eventProgress.total === null && Boolean(stageFallback);
   return {
     stageKey,
@@ -482,6 +610,7 @@ export function resolveDisplayedStagePresentation(job, eventsPayload) {
     progressCurrent: latestCurrentProgress?.current ?? eventPayload.progress_current,
     progressTotal: latestCurrentProgress?.total ?? eventPayload.progress_total,
     progressPercent: latestCurrentProgress?.progressPercent ?? null,
+    progressUnit: latestCurrentProgress?.progressUnit || eventPayload.progress_unit || "",
     substageKey: stageSubtypeOf(currentSubstagePayload),
     progressIndeterminate: currentProgressIndeterminate,
   };

@@ -49,6 +49,10 @@ _ACTIVE_PIPELINE_EVENT_WRITER: ContextVar["PipelineEventWriter | None"] = Contex
     "active_pipeline_event_writer",
     default=None,
 )
+_ACTIVE_RENDER_PAGE_PROGRESS: ContextVar[tuple[int, int] | None] = ContextVar(
+    "active_render_page_progress",
+    default=None,
+)
 
 
 def _now_iso() -> str:
@@ -268,13 +272,49 @@ def emit_render_page_progress(
     message: str,
     payload: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
+    current_value = max(0, int(current))
+    total_value = max(0, int(total))
+    previous = _ACTIVE_RENDER_PAGE_PROGRESS.get()
+    if previous is not None and previous[1] == total_value and current_value < previous[0]:
+        return None
+    _ACTIVE_RENDER_PAGE_PROGRESS.set((current_value, total_value))
     return emit_stage_progress(
         stage="rendering",
         message=message,
-        progress_current=current,
-        progress_total=total,
-        payload=payload,
+        progress_current=current_value,
+        progress_total=total_value,
+        payload={
+            "user_stage": "render",
+            "substage": "render_pages",
+            "progress_unit": "page",
+            **(payload or {}),
+        },
     )
+
+
+def emit_render_compile_progress(
+    *,
+    current: int,
+    total: int,
+    message: str,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    return emit_stage_progress(
+        stage="rendering",
+        message=message,
+        progress_current=max(0, int(current)),
+        progress_total=max(0, int(total)),
+        payload={
+            "user_stage": "render",
+            "substage": "render_compile",
+            "progress_unit": "step",
+            **(payload or {}),
+        },
+    )
+
+
+def reset_render_page_progress() -> None:
+    _ACTIVE_RENDER_PAGE_PROGRESS.set(None)
 
 
 def emit_artifact_published(

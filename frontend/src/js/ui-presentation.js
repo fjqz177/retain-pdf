@@ -191,7 +191,37 @@ export function updateJobWarning(status) {
   setJobWarningVisible(active);
 }
 
-export function renderJob(payload, eventsPayload = null, manifestPayload = null) {
+function normalizeStageActionKey(stage = "") {
+  const value = `${stage || ""}`.trim().toLowerCase();
+  if (value === "translation" || value === "translate") {
+    return "translate";
+  }
+  if (value === "ocr" || value === "render") {
+    return value;
+  }
+  return "";
+}
+
+function normalizeStageRetryActions(stageActionsPayload = null) {
+  const stages = Array.isArray(stageActionsPayload?.stages) ? stageActionsPayload.stages : [];
+  const actions = {};
+  stages.forEach((item) => {
+    const stageKey = normalizeStageActionKey(item?.stage);
+    if (!stageKey) {
+      return;
+    }
+    actions[stageKey] = {
+      stage: item.stage === "translation" ? "translation" : stageKey,
+      label: item.label || (stageKey === "render" ? "重新渲染" : "重新执行"),
+      canRetry: item.can_retry === true,
+      disabledReason: item.disabled_reason || item.reason || "",
+      danger: item.danger === true,
+    };
+  });
+  return actions;
+}
+
+export function renderJob(payload, eventsPayload = null, manifestPayload = null, stageActionsPayload = null) {
   const job = normalizeJobPayload(payload);
   const nextJobId = job.job_id || state.currentJobId;
   state.currentJobSnapshot = job;
@@ -215,6 +245,11 @@ export function renderJob(payload, eventsPayload = null, manifestPayload = null)
     state.currentJobManifest = manifestPayload;
     state.currentJobManifestJobId = nextJobId;
     state.currentJobManifestFetchedAt = Date.now();
+  }
+  if (stageActionsPayload !== null) {
+    state.currentJobStageActions = stageActionsPayload;
+    state.currentJobStageActionsJobId = nextJobId;
+    state.currentJobStageActionsFetchedAt = Date.now();
   }
   const stagePresentation = resolveDisplayedStagePresentation(
     job,
@@ -249,6 +284,8 @@ export function renderJob(payload, eventsPayload = null, manifestPayload = null)
   const readerEnabled = isReaderActionEnabled(job, manifestPayload);
   const stageText = stagePresentation.detail;
   if (renderStatusCardSnapshot({
+      jobId: job.job_id || nextJobId || "",
+      status: job.status || "idle",
       label: stagePresentation.label,
       value: stageText || "准备中",
       stageKey: stagePresentation.stageKey,
@@ -259,11 +296,15 @@ export function renderJob(payload, eventsPayload = null, manifestPayload = null)
       progressFallbackText: "-",
       progressPercent: stagePresentation.progressPercent ?? job.progress_percent,
       progressText: stagePresentation.progressText,
+      progressUnit: stagePresentation.progressUnit,
       progressIndeterminate: stagePresentation.progressIndeterminate,
       errorText: publicErrorText === "-" ? "" : publicErrorText,
       stageProgressByKey: collectStageProgressByKey(
         job,
         eventsPayload !== null ? eventsPayload : state.currentJobEvents,
+      ),
+      stageRetryActions: normalizeStageRetryActions(
+        stageActionsPayload !== null ? stageActionsPayload : state.currentJobStageActions,
       ),
       pdfReady: actions.pdfEnabled && !!actions.pdf && job.status === "succeeded",
       readerReady: readerEnabled && job.status === "succeeded",

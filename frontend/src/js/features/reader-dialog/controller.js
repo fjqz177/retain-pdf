@@ -13,6 +13,7 @@ import {
   updateDownloadProgress,
 } from "../../download-feedback.js";
 import {
+  resolveSourcePdfDownloadName,
   resolveTranslatedPdfDownloadName,
   resolveManifestArtifactUrl,
 } from "../../job-artifacts.js";
@@ -238,11 +239,12 @@ export function mountReaderDialogFeature({
       return;
     }
     try {
+      const preferredName = resolveSourcePdfDownloadName(state, `${state.currentJobId || "result"}-source.pdf`);
       await downloadProtectedResource(
         fetchProtected,
         url,
         `${state.currentJobId || "result"}-source.pdf`,
-        "",
+        preferredName,
         ({ filename, receivedBytes, totalBytes, percent, done }) => {
           setText("error-box", done ? `已开始保存 ${filename}` : summarizeDownloadProgress(receivedBytes, totalBytes, percent));
         },

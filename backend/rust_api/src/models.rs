@@ -59,7 +59,8 @@ pub use view::{
     ListJobEventsQuery, ListJobsQuery, ListTranslationItemsQuery, MarkdownArtifactView,
     MarkdownQuery, MarkdownView, NormalizationSummaryView, OcrJobSummaryView, PagePreviewQuery,
     ReaderDocumentMetadataView, ReaderMetadataView, ReaderPageMetadataView, ReaderRegionBoxView,
-    ReaderRegionItemView, ReaderRegionsView, ResourceLinkView, TranslationDebugIndexView,
-    TranslationDebugItemView, TranslationDebugListItemView, TranslationDebugListView,
-    TranslationDiagnosticsView, TranslationReplayView,
+    ReaderRegionItemView, ReaderRegionsView, ResourceLinkView, RetryStageKind, RetryStageRequest,
+    RetryStageSubmissionView, StageActionsView, StageRetryActionLinkView, StageRetryActionView,
+    TranslationDebugIndexView, TranslationDebugItemView, TranslationDebugListItemView,
+    TranslationDebugListView, TranslationDiagnosticsView, TranslationReplayView,
 };

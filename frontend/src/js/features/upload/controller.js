@@ -33,6 +33,11 @@ export function mountUploadFeature({
   refreshSubmitControls,
   workflowNeedsUpload,
 }) {
+  function formatByteLimit(bytes) {
+    const mb = Number(bytes) / (1024 * 1024);
+    return Number.isFinite(mb) && mb > 0 ? `${Math.round(mb)}MB` : "当前";
+  }
+
   function normalizePageRangeValue(startValue = "", endValue = "") {
     const start = startValue.trim();
     const end = endValue.trim();
@@ -111,7 +116,7 @@ export function mountUploadFeature({
       return;
     }
     if (file.size > frontMaxBytes) {
-      setText("error-box", "当前前端限制为 100MB 以内 PDF");
+      setText("error-box", `当前前端限制为 ${formatByteLimit(frontMaxBytes)} 以内 PDF`);
       showUploadStatus("文件超出大小限制");
       return;
     }

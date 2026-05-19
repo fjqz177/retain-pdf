@@ -201,7 +201,7 @@ Rust 根据 workflow 选择运行计划：
 - `render.source_cleanup_strategy = "pikepdf_text_strip"`
 - 含义：默认先用 pikepdf 按 bbox 删除原 PDF content-stream text-op，再由 Typst 翻译块自带背景色做视觉覆盖
 - 可选值：`typst_fill | pikepdf_text_strip | bbox_text_strip | legacy | redact_restore_formulas`
-- `pikepdf_text_strip` 表示渲染前用 pikepdf 做路径级 content-stream text-op 删除，再由 Typst 背景块做视觉覆盖；`bbox_text_strip` / `legacy` 是兼容别名；`redact_restore_formulas` 用于公式密集 PDF 的实验性内容流文本删除，公式 bbox 作为保护区，不走 PyMuPDF redaction
+- `pikepdf_text_strip` 表示渲染前用 pikepdf 做路径级 content-stream text-op 删除，再由 Typst 背景块做视觉覆盖；`bbox_text_strip`、`legacy`、`redact_restore_formulas` 当前都是兼容别名，行为等同 `pikepdf_text_strip`
 
 ### 第五步：job_runner 进入运行时主链
 

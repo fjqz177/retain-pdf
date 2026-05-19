@@ -25,6 +25,7 @@ from services.rendering.output.typst.compiler import compile_typst_render_pages_
 from services.rendering.output.typst.overlay_ops import overlay_translated_items_on_page
 from services.rendering.output.typst.overlay_ops import overlay_translated_pages_on_doc
 from services.rendering.output.typst.sanitize import sanitize_page_specs_for_typst_book_background
+from services.pipeline_shared.events import emit_render_compile_progress
 
 
 def _build_overlay_base_doc(source_pdf_path: Path) -> fitz.Document:
@@ -46,9 +47,23 @@ def _compile_render_pages_pdf_resilient(
     font_family: str = fonts.TYPST_DEFAULT_FONT_FAMILY,
     font_paths: list[Path] | None = None,
     work_dir: Path,
-) -> Path:
+) -> tuple[Path, dict[str, object]]:
+    diagnostics: dict[str, object] = {
+        "background_compile_retried": False,
+        "background_compile_failed": False,
+        "background_first_compile_elapsed_seconds": 0.0,
+        "background_sanitize_elapsed_seconds": 0.0,
+        "background_sanitized_compile_elapsed_seconds": 0.0,
+    }
+    compile_started = time.perf_counter()
     try:
-        return compile_typst_render_pages_pdf(
+        emit_render_compile_progress(
+            current=1,
+            total=4,
+            message=f"正在编译整本 Typst 渲染，共 {len(page_specs)} 页",
+            payload={"render_stage": "background_typst_compile_start"},
+        )
+        compiled_path = compile_typst_render_pages_pdf(
             background_pdf_path=background_pdf_path,
             page_specs=page_specs,
             stem="book-background-overlay",
@@ -56,10 +71,28 @@ def _compile_render_pages_pdf_resilient(
             font_paths=font_paths,
             work_dir=work_dir,
         )
+        diagnostics["background_first_compile_elapsed_seconds"] = time.perf_counter() - compile_started
+        emit_render_compile_progress(
+            current=4,
+            total=4,
+            message=f"整本 Typst 渲染编译完成，共 {len(page_specs)} 页",
+            payload={"render_stage": "background_typst_compile_done"},
+        )
+        return compiled_path, diagnostics
     except RuntimeError as exc:
+        diagnostics["background_compile_retried"] = True
+        diagnostics["background_compile_failed"] = True
+        diagnostics["background_first_compile_elapsed_seconds"] = time.perf_counter() - compile_started
         print("typst background render compile failed; sanitizing pages", flush=True)
         print(str(exc), flush=True)
+        emit_render_compile_progress(
+            current=2,
+            total=4,
+            message="整本 Typst 渲染编译失败，开始检查不兼容页面",
+            payload={"render_stage": "background_typst_compile_failed"},
+        )
         background_page_specs = collect_background_page_specs(source_pdf_path, translated_pages)
+        sanitize_started = time.perf_counter()
         sanitized_background_specs = sanitize_page_specs_for_typst_book_background(
             background_page_specs,
             stem="book-background-overlay",
@@ -70,13 +103,21 @@ def _compile_render_pages_pdf_resilient(
             font_paths=font_paths,
             work_dir=work_dir,
         )
+        diagnostics["background_sanitize_elapsed_seconds"] = time.perf_counter() - sanitize_started
+        emit_render_compile_progress(
+            current=3,
+            total=4,
+            message="Typst 不兼容页面检查完成，开始重新编译",
+            payload={"render_stage": "background_typst_sanitize_done"},
+        )
         sanitized_pages = {page_idx: items for page_idx, _w, _h, items in sanitized_background_specs}
         sanitized_render_page_specs = build_render_page_specs(
             source_pdf_path=source_pdf_path,
             translated_pages=sanitized_pages,
             prepared=True,
         )
-        return compile_typst_render_pages_pdf(
+        sanitized_compile_started = time.perf_counter()
+        compiled_path = compile_typst_render_pages_pdf(
             background_pdf_path=background_pdf_path,
             page_specs=sanitized_render_page_specs,
             stem="book-background-overlay-sanitized",
@@ -84,6 +125,16 @@ def _compile_render_pages_pdf_resilient(
             font_paths=font_paths,
             work_dir=work_dir,
         )
+        diagnostics["background_sanitized_compile_elapsed_seconds"] = (
+            time.perf_counter() - sanitized_compile_started
+        )
+        emit_render_compile_progress(
+            current=4,
+            total=4,
+            message=f"修复后的整本 Typst 渲染编译完成，共 {len(sanitized_render_page_specs)} 页",
+            payload={"render_stage": "background_typst_sanitized_compile_done"},
+        )
+        return compiled_path, diagnostics
 
 
 def build_single_page_typst_pdf(
@@ -281,28 +332,40 @@ def build_book_typst_background_pdf(
     indent_detection_pdf_path: Path | None = None,
     first_line_indent_lookup: dict[str, float] | None = None,
     effective_inner_bbox_lookup: dict[str, list[float]] | None = None,
-) -> None:
+    compile_workers: int | None = None,
+    source_text_precleaned_page_indices: frozenset[int] = frozenset(),
+) -> dict[str, object]:
+    del compile_workers
+    diagnostics: dict[str, object] = {"mode": "typst"}
+    total_started = time.perf_counter()
     work_dir = prepare_background_work_dir(output_pdf_path, temp_root)
+    prepare_started = time.perf_counter()
     translated_pages = prepare_translated_pages_for_render(
         indent_detection_pdf_path or source_pdf_path,
         translated_pages,
         first_line_indent_lookup=first_line_indent_lookup,
         effective_inner_bbox_lookup=effective_inner_bbox_lookup,
     )
+    diagnostics["background_prepare_elapsed_seconds"] = time.perf_counter() - prepare_started
+    specs_started = time.perf_counter()
     page_specs = build_render_page_specs(
         source_pdf_path=source_pdf_path,
         translated_pages=translated_pages,
         prepared=True,
     )
+    diagnostics["background_page_specs_elapsed_seconds"] = time.perf_counter() - specs_started
     page_map = RenderPageMap.from_page_specs(page_specs)
+    cleanup_started = time.perf_counter()
     cleaned_background_pdf = build_clean_background_pdf(
         source_pdf_path=source_pdf_path,
         translated_pages=translated_pages,
         output_pdf_path=work_dir / "book-background-cleaned.pdf",
         redaction_strategy=redaction_strategy,
         page_specs=page_specs,
+        source_text_precleaned_page_indices=source_text_precleaned_page_indices,
     )
-    background_pdf = _compile_render_pages_pdf_resilient(
+    diagnostics["background_source_cleanup_elapsed_seconds"] = time.perf_counter() - cleanup_started
+    background_pdf, compile_diagnostics = _compile_render_pages_pdf_resilient(
         source_pdf_path=source_pdf_path,
         background_pdf_path=cleaned_background_pdf,
         translated_pages=translated_pages,
@@ -314,9 +377,14 @@ def build_book_typst_background_pdf(
         font_paths=font_paths,
         work_dir=work_dir,
     )
+    diagnostics.update(compile_diagnostics)
+    save_started = time.perf_counter()
     save_background_pdf_to_output(
         background_pdf,
         output_pdf_path,
         source_pdf_path=source_pdf_path,
         page_map=page_map,
     )
+    diagnostics["background_save_elapsed_seconds"] = time.perf_counter() - save_started
+    diagnostics["background_total_elapsed_seconds"] = time.perf_counter() - total_started
+    return diagnostics

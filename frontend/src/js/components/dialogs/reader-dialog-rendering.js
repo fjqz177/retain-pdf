@@ -4,6 +4,7 @@ export function readerDialogElements(host) {
     frame: host.querySelector("#reader-dialog-frame"),
     loading: host.querySelector("#reader-dialog-loading"),
     loadingText: host.querySelector("#reader-dialog-loading-text"),
+    loadingPercent: host.querySelector("#reader-dialog-loading-percent"),
     loadingBar: host.querySelector("#reader-dialog-loading-bar"),
   };
 }
@@ -17,13 +18,17 @@ export function setReaderDialogLoadingProgress(host, {
   percent = 0,
   widthPercent = null,
 } = {}) {
-  const { loadingText, loadingBar } = readerDialogElements(host);
+  const { loadingText, loadingPercent, loadingBar } = readerDialogElements(host);
+  const hasWidthPercent = widthPercent !== null && widthPercent !== undefined;
+  const safePercent = Math.max(0, Math.min(100, Number(hasWidthPercent ? widthPercent : percent) || 0));
   if (loadingText) {
     loadingText.textContent = text;
   }
+  if (loadingPercent) {
+    loadingPercent.textContent = `${safePercent.toFixed(0)}%`;
+  }
   if (loadingBar) {
-    const value = widthPercent ?? percent;
-    loadingBar.style.width = `${Math.max(0, Math.min(100, Number(value) || 0))}%`;
+    loadingBar.style.width = `${safePercent}%`;
   }
 }
 

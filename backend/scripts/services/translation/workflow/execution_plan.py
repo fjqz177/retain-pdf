@@ -12,8 +12,8 @@ from services.translation.ocr.json_extractor import load_ocr_json
 from services.translation.policy import TranslationPolicyConfig
 from services.translation.policy import build_book_translation_policy_config
 from services.translation.session_context import build_translation_context_from_policy
-from services.translation.terms import merge_auto_preserve_glossary_entries
 from services.translation.terms import GlossaryEntry
+from services.translation.terms import normalize_glossary_entries
 
 if TYPE_CHECKING:
     from services.translation.workflow.execution import TranslationExecutionRequest
@@ -58,13 +58,7 @@ def build_translation_execution_plan(request: TranslationExecutionRequest) -> Tr
         )
     print(f"rule profile: {policy_config.rule_profile_name}", flush=True)
 
-    glossary_entries = merge_auto_preserve_glossary_entries(
-        request.glossary_entries or [],
-        _iter_translatable_texts(data),
-    )
-    auto_preserve_count = max(0, len(glossary_entries) - len(request.glossary_entries or []))
-    if auto_preserve_count:
-        print(f"terms: auto preserve technical terms={auto_preserve_count}", flush=True)
+    glossary_entries = normalize_glossary_entries(request.glossary_entries or [])
 
     translation_context = build_translation_context_from_policy(
         policy_config,
@@ -100,17 +94,3 @@ def build_translation_execution_plan(request: TranslationExecutionRequest) -> Tr
         run_diagnostics=run_diagnostics,
         glossary_entries=glossary_entries,
     )
-
-
-def _iter_translatable_texts(data: dict):
-    for page in data.get("pages", []) or []:
-        for block in page.get("blocks", []) or []:
-            content = block.get("content", {}) or {}
-            policy = block.get("policy", {}) or {}
-            if str(content.get("kind", "") or "").strip().lower() != "text":
-                continue
-            if policy.get("translate") is False:
-                continue
-            text = str(content.get("text") or block.get("text") or "").strip()
-            if text:
-                yield text

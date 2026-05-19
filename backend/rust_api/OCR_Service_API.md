@@ -439,15 +439,15 @@ output/20260331033736-c2bcda/
 但要注意：
 
 - 当前 provider 已不止 `mineru`，但不同部署启用的 provider 集合可能不同
-- MinerU 的 submit/poll/download 目前还是通过 Python worker 执行
-- Rust 侧现在已经负责：
+- Rust 侧已经负责 MinerU / Paddle provider transport 的提交、轮询、结果下载或 raw 产物落盘
+- Python 侧仍负责 raw OCR -> `document.v1.json` 的 normalize，以及后续 translate / render worker
+- Rust 侧还负责：
   - HTTP API
   - 任务状态
   - 分页列表
   - trace_id
   - 取消/超时
   - artifacts 索引
-- 后续如果进入下一阶段，会把 MinerU 的真实 HTTP 调用继续迁到 Rust provider client
 
 ## 12. 推荐对接方式
 

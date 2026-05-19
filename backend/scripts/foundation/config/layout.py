@@ -13,11 +13,11 @@ SOURCE_CLEANUP_BBOX_TEXT_STRIP_ALIASES = {
     SOURCE_CLEANUP_PIKEPDF_TEXT_STRIP,
     "bbox_text_strip",
     "legacy",
+    "redact_restore_formulas",
 }
 SOURCE_CLEANUP_STRATEGIES = {
     SOURCE_CLEANUP_TYPST_FILL,
     *SOURCE_CLEANUP_BBOX_TEXT_STRIP_ALIASES,
-    "redact_restore_formulas",
 }
 
 
@@ -62,6 +62,8 @@ def apply_layout_tuning(
 
 def normalize_source_cleanup_strategy(value: str | None) -> str:
     strategy = str(value or "").strip().lower()
+    if strategy == "redact_restore_formulas":
+        return SOURCE_CLEANUP_PIKEPDF_TEXT_STRIP
     return strategy if strategy in SOURCE_CLEANUP_STRATEGIES else SOURCE_CLEANUP_TYPST_FILL
 
 
@@ -75,5 +77,4 @@ def use_bbox_text_strip_cleanup(strategy: str | None = None) -> bool:
 
 
 def use_redact_restore_formula_cleanup(strategy: str | None = None) -> bool:
-    resolved = normalize_source_cleanup_strategy(strategy) if strategy is not None else SOURCE_CLEANUP_STRATEGY
-    return resolved == "redact_restore_formulas"
+    return False

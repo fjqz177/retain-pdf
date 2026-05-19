@@ -181,7 +181,13 @@ def main() -> None:
         print(format_stdout_kv(STDOUT_LABEL_OUTPUT_PDF, result["output_pdf_path"]))
         print(format_stdout_kv(STDOUT_LABEL_SUMMARY, summary_path))
         print(f"pages processed: {result['pages_rendered']}")
-        print(f"save time: {elapsed:.2f}s")
+        diagnostics = result.get("render_diagnostics", {})
+        save_elapsed = (
+            diagnostics.get("background_save_elapsed_seconds")
+            or diagnostics.get("save_elapsed_seconds")
+            or 0.0
+        )
+        print(f"save time: {float(save_elapsed or 0.0):.2f}s")
         print(f"total time: {elapsed:.2f}s")
         if result.get("effective_render_mode"):
             print(f"effective render mode: {result['effective_render_mode']}")

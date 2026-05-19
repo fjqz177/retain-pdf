@@ -58,6 +58,7 @@ export function jobStatusCardTemplate({
             <div class="progress-track"><div id="job-progress-bar" class="progress-bar"></div></div>
             <div id="job-progress-text" class="status-progress-text">-</div>
           </div>
+          <div id="status-stage-retry" class="status-stage-retry hidden"></div>
         </div>
       </div>
       <div class="status-card-footer">

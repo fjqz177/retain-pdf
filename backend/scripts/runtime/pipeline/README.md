@@ -66,8 +66,8 @@
   只负责页范围和 `auto` 模式判定，包括是否更适合走可编辑 PDF 路径。
 - `translation_loader.py`
   只负责读取和筛选翻译结果文件，把 per-page translation JSON 组织成渲染阶段可消费的数据结构。
-- `book_translation_flow.py`
-  负责全书翻译的内部编排，包括 continuation、策略应用、批量翻译、结果回填和落盘。
+- `translation_stage.py`
+  负责全书翻译阶段的 pipeline facade，内部通过 `services.translation.workflow` 执行 continuation、策略应用、批量翻译、结果回填和落盘。
 
 ## 协作方式
 

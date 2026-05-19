@@ -109,6 +109,15 @@ function stageSubtypeOf(payload) {
     if (explicitSubstage.includes("garbled")) {
       return "garbled";
     }
+    if (explicitSubstage.includes("render_compile")) {
+      return "render_compile";
+    }
+    if (explicitSubstage.includes("render_pages")) {
+      return "render_pages";
+    }
+    if (explicitSubstage.includes("render_prepare")) {
+      return "render_prepare";
+    }
     if (explicitSubstage.includes("prepare")) {
       return "translation_prepare";
     }

@@ -142,25 +142,25 @@
 
 ## 结构化输出
 
-任务输出统一落到：
+任务输出统一落到标准 job root 下。Rust API 默认是：
 
-- `output/<job-id>/source`
-- `output/<job-id>/ocr`
-- `output/<job-id>/translated`
-- `output/<job-id>/rendered`
-- `output/<job-id>/artifacts`
-- `output/<job-id>/logs`
+- `DATA_ROOT/jobs/<job-id>/source`
+- `DATA_ROOT/jobs/<job-id>/ocr`
+- `DATA_ROOT/jobs/<job-id>/translated`
+- `DATA_ROOT/jobs/<job-id>/rendered`
+- `DATA_ROOT/jobs/<job-id>/artifacts`
+- `DATA_ROOT/jobs/<job-id>/logs`
 
 其中：
 
-- `ocr/unpacked/layout.json` 保留原始 MinerU OCR 输出
+- `ocr/unpacked/` 或 provider raw 目录保留 OCR provider 原始产物；MinerU 常见为 `layout.json`，Paddle 常见为 `paddle_result.json` / `paddle_raw`
 - `ocr/normalized/document.v1.json` 是当前翻译/渲染主链路使用的统一 OCR 输入
 - `ocr/normalized/document.v1.report.json` 记录 adapter/provider 探测、defaults 默认补齐和 schema 校验摘要
-- `translated/translations` 是中间翻译结果
+- `translated/translation-manifest.json` 与其引用的逐页 payload 是翻译阶段正式产物
 - `rendered/*.pdf` 是最终输出 PDF
 - `rendered/typst/` 保留 Typst 中间产物，便于查错和回溯
 - `artifacts/` 放 summary、bundle 索引等下载产物
-- `logs/` 放阶段日志和后续结构化事件输出
+- `logs/` 放阶段日志和结构化事件输出
 
 当前约定：
 
@@ -181,7 +181,7 @@
 
 当前 Rust API 到 Python worker 的稳定协议，已经固定为：
 
-`python -u <entrypoint> --spec output/<job-id>/specs/<stage>.spec.json`
+`python -u <entrypoint> --spec DATA_ROOT/jobs/<job-id>/specs/<stage>.spec.json`
 
 约定如下：
 

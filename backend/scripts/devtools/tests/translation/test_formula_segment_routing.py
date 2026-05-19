@@ -140,7 +140,13 @@ def test_formula_dense_prose_prefers_plain_route() -> None:
     assert segment_routing.formula_segment_translation_route(item) == "none"
 
 
-def test_segment_parser_allows_empty_optional_connector_segment() -> None:
+def test_real_short_words_are_not_dropped_as_micro_segments() -> None:
+    assert not segment_routing.is_micro_formula_segment("Information")
+    assert not segment_routing.is_micro_formula_segment("energy")
+    assert segment_routing.is_micro_formula_segment("of")
+
+
+def test_segment_parser_rejects_empty_connector_segment() -> None:
     expected_segments = [
         {"segment_id": "1", "source_text": "Transfer of a proton and an electron would lead to isobutyronitrile"},
         {"segment_id": "2", "source_text": "by"},
@@ -157,9 +163,22 @@ def test_segment_parser_allows_empty_optional_connector_segment() -> None:
         ensure_ascii=False,
     )
 
-    result = segment_routing.parse_segment_translation_payload(content, expected_segments=expected_segments)
+    try:
+        segment_routing.parse_segment_translation_payload(content, expected_segments=expected_segments)
+    except segment_routing.SegmentTranslationSemanticError:
+        return
+    raise AssertionError("empty connector segment should be rejected")
 
-    assert result["2"] == ""
+
+def test_segment_parser_rejects_empty_of_segment() -> None:
+    expected_segments = [{"segment_id": "1", "source_text": "of"}]
+    content = json.dumps({"segments": [{"segment_id": "1", "translated_text": ""}]}, ensure_ascii=False)
+
+    try:
+        segment_routing.parse_segment_translation_payload(content, expected_segments=expected_segments)
+    except segment_routing.SegmentTranslationSemanticError:
+        return
+    raise AssertionError("empty 'of' segment should be rejected")
 
 
 def test_segment_parser_rejects_empty_non_connector_segment() -> None:

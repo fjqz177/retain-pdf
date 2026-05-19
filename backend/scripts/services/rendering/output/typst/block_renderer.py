@@ -11,6 +11,7 @@ from services.rendering.output.typst.block_markup import typst_markdown_block
 from services.rendering.output.typst.block_markup import typst_markdown_fit_call
 from services.rendering.output.typst.block_markup import typst_place_context
 from services.rendering.output.typst.block_markup import typst_plain_markdown_expr
+from services.rendering.output.typst.block_markup import typst_plain_text_expr
 from services.rendering.output.typst.block_markup import typst_single_line_fit_call
 from services.rendering.output.typst.shared import escape_typst_string
 
@@ -53,7 +54,7 @@ def build_typst_block(block_id: str, block: RenderBlock, *, include_fill: bool =
         if len(plain_text) > PLAIN_LINE_FIT_MAX_CHARS:
             text_name = f"{fields.var_prefix}_txt"
             body_name = f"{fields.var_prefix}_body"
-            body_expr = typst_plain_markdown_expr(
+            body_expr = typst_plain_text_expr(
                 text_name,
                 font_size_pt=fields.font_size,
                 leading_em=fields.leading,

@@ -536,6 +536,7 @@ Workflow contract:
 - `workflow=translate`: OCR -> Normalize -> Translate; no render step
 - `workflow=render`: reuse `source.artifact_job_id`; rerun render only
 - `POST /api/v1/jobs/{job_id}/rerun`: if the source job already has `translations_dir + source_pdf`, the backend reuses the same `job_id`, resets render runtime state, and replaces render artifacts in place. If only `normalized_document_json + source_pdf` is available, it creates a new `book` recovery job.
+- `GET /api/v1/jobs/{job_id}/stage-actions` and `POST /api/v1/jobs/{job_id}/retry-stage` are the explicit stage-level retry contract for frontend stage cards. The backend decides reusable artifacts, rerun stages, and whether a request can run.
 
 Endpoint boundary:
 
@@ -568,7 +569,7 @@ Render options:
 - `pikepdf_text_strip` runs the path-level pikepdf content-stream text-op stripping pass before Typst overlay; visual cover still comes from Typst block fill
 - `typst_fill` keeps source text covered by Typst background blocks instead of running bbox text stripping
 - `bbox_text_strip` and `legacy` are compatibility aliases for the pikepdf text-strip path
-- `redact_restore_formulas` uses the pikepdf content-stream text stripping path on formula-heavy pages, with `formula` / `display_formula` bbox regions as protected areas; it avoids PyMuPDF redactions for better browser PDF compatibility
+- `redact_restore_formulas` is a compatibility alias for the current `pikepdf_text_strip` behavior; keep the name only for old configs/spec replay and do not treat it as a separate formula restore strategy
 - `render.inner_bbox_shrink_x`, `render.inner_bbox_shrink_y`, `render.inner_bbox_dense_shrink_x`, and `render.inner_bbox_dense_shrink_y` default to `0.0`
 
 Validation:
@@ -698,6 +699,147 @@ Example item:
 
 ## 2.1 Reader Regions
 
+## 2.1 Stage Retry Actions
+
+`GET /api/v1/jobs/{job_id}/stage-actions`
+
+Returns frontend-ready stage buttons. This endpoint is for user-initiated stage
+reruns and is separate from failure-oriented `resume-plan`.
+
+Response:
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "job_id": "20260519010101-abcd12",
+    "stages": [
+      {
+        "stage": "ocr",
+        "label": "重试 OCR",
+        "can_retry": true,
+        "reason": "",
+        "disabled_reason": "",
+        "action": {
+          "method": "POST",
+          "url": "http://127.0.0.1:41000/api/v1/jobs/20260519010101-abcd12/retry-stage",
+          "body": {"stage": "ocr"}
+        },
+        "will_reuse": ["source_pdf"],
+        "will_rerun": ["ocr", "translation", "render"],
+        "danger": true
+      },
+      {
+        "stage": "translation",
+        "label": "重试翻译",
+        "can_retry": true,
+        "reason": "",
+        "disabled_reason": "",
+        "action": {
+          "method": "POST",
+          "url": "http://127.0.0.1:41000/api/v1/jobs/20260519010101-abcd12/retry-stage",
+          "body": {"stage": "translation"}
+        },
+        "will_reuse": ["source_pdf", "ocr_result"],
+        "will_rerun": ["translation", "render"],
+        "danger": false
+      },
+      {
+        "stage": "render",
+        "label": "重新渲染",
+        "can_retry": true,
+        "reason": "",
+        "disabled_reason": "",
+        "action": {
+          "method": "POST",
+          "url": "http://127.0.0.1:41000/api/v1/jobs/20260519010101-abcd12/retry-stage",
+          "body": {"stage": "render"}
+        },
+        "will_reuse": ["source_pdf", "ocr_result", "translation_result"],
+        "will_rerun": ["render"],
+        "danger": false
+      }
+    ]
+  }
+}
+```
+
+Rules:
+
+- queued/running jobs return disabled stage actions; cancel the job before
+  retrying a stage.
+- OCR retry currently requires the original `upload_id` or `source_url` to still
+  be available on the job. Jobs that only have `source_pdf` as an artifact may
+  expose OCR as disabled until artifact-backed OCR retry is implemented.
+- translation retry requires `source_pdf + normalized_document_json`.
+- render retry requires `source_pdf + translations_dir`.
+
+`POST /api/v1/jobs/{job_id}/retry-stage`
+
+Request:
+
+```json
+{
+  "stage": "translation",
+  "mode": "from_stage",
+  "create_new_job": true,
+  "overrides": {
+    "translation": {
+      "model": "deepseek-v4-flash",
+      "glossary_id": "glossary-xxx",
+      "workers": 50
+    },
+    "render": {
+      "compile_workers": 8
+    }
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "job_id": "20260519010202-ef3456",
+    "source_job_id": "20260519010101-abcd12",
+    "status": "queued",
+    "workflow": "book",
+    "rerun_from_stage": "translation",
+    "reused_artifacts": ["source_pdf", "ocr_result"],
+    "rerun_stages": ["translation", "render"],
+    "links": {},
+    "actions": {}
+  }
+}
+```
+
+Request fields:
+
+- `stage`: `ocr`, `translation`, or `render`.
+- `mode`: optional; currently only `from_stage` is supported.
+- `create_new_job`: optional; defaults to `true`.
+- `overrides`: optional object with `ocr`, `translation`, `render`, and
+  `runtime` sections. Unknown sections are rejected. Each section is validated
+  against the same input structs as normal job creation.
+
+Execution semantics:
+
+- `stage=ocr`: reuses the original upload or source URL, reruns OCR ->
+  translation -> render, and creates a new `book` job.
+- `stage=translation`: reuses source PDF and OCR result, reruns translation ->
+  render, and creates a new `book` job.
+- `stage=render`: reuses source PDF, OCR result, and translation result, reruns
+  render, and creates a new `render` job by default.
+- `stage=render` with `create_new_job=false`: reuses the existing job id and
+  replaces render artifacts in place. This is the only in-place retry currently
+  supported.
+
+## 2.2 Reader Regions
+
 `GET /api/v1/jobs/{job_id}/reader/regions`
 
 Reader-only endpoint for source/translated hover alignment. The backend projects
@@ -741,7 +883,7 @@ Notes:
   diagnostics may replace it with the final rendered Typst block bbox while
   keeping this response shape stable.
 
-## 2.2 Glossary Resources
+## 2.3 Glossary Resources
 
 Named glossary endpoints:
 

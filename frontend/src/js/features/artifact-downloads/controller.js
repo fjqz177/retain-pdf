@@ -14,7 +14,10 @@ import {
   showDownloadPreparing,
   updateDownloadProgress,
 } from "../../download-feedback.js";
-import { resolveTranslatedPdfDownloadName } from "../../job-artifacts.js";
+import {
+  resolveSourcePdfDownloadName,
+  resolveTranslatedPdfDownloadName,
+} from "../../job-artifacts.js";
 
 export function mountArtifactDownloadsFeature({
   state,
@@ -70,7 +73,9 @@ export function mountArtifactDownloadsFeature({
               : `${jobId}.json`;
     const preferredName = link.id === "pdf-btn"
       ? resolveTranslatedPdfDownloadName(state, fallbackName)
-      : fallbackName;
+      : link.id === "source-pdf-btn"
+        ? resolveSourcePdfDownloadName(state, fallbackName)
+        : fallbackName;
     const downloadTarget = await prepareDownloadTarget(preferredName);
     if (downloadTarget.kind === "aborted") {
       return;
@@ -86,7 +91,7 @@ export function mountArtifactDownloadsFeature({
       }
 
       const disposition = resp.headers.get("content-disposition") || "";
-      const filename = link.id === "pdf-btn"
+      const filename = link.id === "pdf-btn" || link.id === "source-pdf-btn"
         ? preferredName
         : fileNameFromDisposition(disposition, fallbackName);
       await saveResponseDownload(resp, {

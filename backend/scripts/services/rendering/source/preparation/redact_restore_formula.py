@@ -7,10 +7,6 @@ import time
 from services.rendering.source.preparation.bbox_text_strip import build_bbox_text_stripped_pdf_copy
 
 
-def _translated_page_indices(translated_pages: dict[int, list[dict]]) -> frozenset[int]:
-    return frozenset(page_idx for page_idx, items in translated_pages.items() if page_idx >= 0 and items)
-
-
 @dataclass(frozen=True)
 class RedactRestoreFormulaResult:
     changed: bool
@@ -47,5 +43,5 @@ def build_redact_restore_formula_pdf_copy(
         pages_changed=result.pages_changed,
         redaction_rects=result.text_show_ops_removed,
         formula_rects_restored=0,
-        changed_page_indices=result.changed_page_indices | result.skipped_no_text_overlap_page_indices | _translated_page_indices(translated_pages),
+        changed_page_indices=result.changed_page_indices,
     )

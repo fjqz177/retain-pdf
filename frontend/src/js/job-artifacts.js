@@ -45,8 +45,12 @@ export function resolveOriginalPdfBaseName(state = {}) {
     state.uploadedFileName,
     rawResponse.filename,
     rawResponse.file_name,
+    rawResponse.source_file_name,
+    rawResponse.display_name,
     rawResponse.original_filename,
     rawResponse.original_file_name,
+    rawResponse.book_summary?.source_file_name,
+    rawResponse.book_summary?.title,
     requestPayload.filename,
     requestPayload.file_name,
     requestPayload.original_filename,
@@ -66,6 +70,11 @@ export function resolveOriginalPdfBaseName(state = {}) {
 export function resolveTranslatedPdfDownloadName(state = {}, fallbackName = "") {
   const originalName = resolveOriginalPdfBaseName(state);
   return originalName ? `zh_${originalName}.pdf` : fallbackName;
+}
+
+export function resolveSourcePdfDownloadName(state = {}, fallbackName = "") {
+  const originalName = resolveOriginalPdfBaseName(state);
+  return originalName ? `${originalName}.pdf` : fallbackName;
 }
 
 function ensureTrailingSlash(value) {

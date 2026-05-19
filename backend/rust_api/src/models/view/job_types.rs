@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::models::{
     JobFailureInfo, JobRuntimeInfo, JobStatusKind, OcrProviderDiagnostics, PublicResolvedJobSpec,
@@ -236,6 +237,72 @@ pub struct JobResumePlanView {
     pub reuses_artifacts: Vec<String>,
     pub reruns_stages: Vec<String>,
     pub reason: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RetryStageKind {
+    Ocr,
+    Translation,
+    Render,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StageRetryActionLinkView {
+    pub method: String,
+    pub url: String,
+    pub body: Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StageRetryActionView {
+    pub stage: RetryStageKind,
+    pub label: String,
+    pub can_retry: bool,
+    pub reason: String,
+    pub disabled_reason: String,
+    pub action: Option<StageRetryActionLinkView>,
+    pub will_reuse: Vec<String>,
+    pub will_rerun: Vec<String>,
+    pub danger: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StageActionsView {
+    pub job_id: String,
+    pub stages: Vec<StageRetryActionView>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RetryStageRequest {
+    pub stage: RetryStageKind,
+    #[serde(default = "default_retry_stage_mode")]
+    pub mode: String,
+    #[serde(default = "default_retry_stage_create_new_job")]
+    pub create_new_job: bool,
+    #[serde(default)]
+    pub overrides: Value,
+}
+
+fn default_retry_stage_mode() -> String {
+    "from_stage".to_string()
+}
+
+fn default_retry_stage_create_new_job() -> bool {
+    true
+}
+
+#[derive(Debug, Serialize)]
+pub struct RetryStageSubmissionView {
+    pub job_id: String,
+    pub source_job_id: String,
+    pub status: JobStatusKind,
+    pub workflow: WorkflowKind,
+    pub rerun_from_stage: RetryStageKind,
+    pub reused_artifacts: Vec<String>,
+    pub rerun_stages: Vec<String>,
+    pub links: JobLinksView,
+    pub actions: JobActionsView,
 }
 
 #[derive(Debug, Serialize)]

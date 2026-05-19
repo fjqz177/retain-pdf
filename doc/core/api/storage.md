@@ -40,9 +40,12 @@ jobs/{job_id}/
 
 SQLite 主要承担：
 
-- `jobs`：任务状态、阶段、错误摘要、日志尾部。
+- `uploads`：源文件名、存储路径、PDF 大小、页数和上传时间。
+- `jobs`：任务状态、阶段、进度、请求/runtime 状态、失败信息和日志尾部。
+- `artifacts`：每个任务的 artifact index JSON。
+- `job_artifact_entries`：规范化 artifact manifest，用于下载和列表展示。
 - `events`：结构化事件流。
-- `artifacts`：产物索引。
+- `glossaries`：命名术语表资源。
 
 接口返回和数据库记录尽量使用相对路径，运行时再解析到真实文件，避免把机器路径暴露给前端。
 

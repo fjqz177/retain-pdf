@@ -75,5 +75,28 @@ def typst_plain_markdown_expr(
     )
 
 
+def typst_plain_text_expr(
+    text_name: str,
+    *,
+    font_size_pt: float,
+    leading_em: float,
+    font_weight: str | None = None,
+    text_fill: str | None = None,
+    first_line_indent_pt: float,
+    justify_text: str,
+) -> str:
+    text_args = [f"size: {font_size_pt}pt"]
+    if font_weight is not None:
+        text_args.append(f'weight: "{font_weight}"')
+    if text_fill is not None:
+        text_args.append(f"fill: {text_fill}")
+    return (
+        f"set text({', '.join(text_args)}); "
+        f"set par(leading: {leading_em}em, justify: {justify_text}); "
+        f"if {first_line_indent_pt}pt > 0pt {{ h({first_line_indent_pt}pt) }}; "
+        f"{text_name}"
+    )
+
+
 def typst_place_context(*, x_pt: float, y_pt: float, body_name: str) -> str:
     return "#context {\n" f"  place(top + left, dx: {x_pt}pt, dy: {y_pt}pt, {body_name})\n" "}\n"
