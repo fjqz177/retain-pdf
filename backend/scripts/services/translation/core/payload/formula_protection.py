@@ -6,11 +6,11 @@ import hashlib
 import re
 from typing import Iterable
 
-from services.translation.services.terms.glossary import GlossaryEntry
-from services.translation.services.terms.glossary import context_matches
-from services.translation.services.terms.glossary import glossary_hard_entries
-from services.translation.services.terms.glossary import normalize_glossary_entries
-from services.translation.services.terms.glossary import term_pattern
+from services.translation.core.terms.glossary import GlossaryEntry
+from services.translation.core.terms.glossary import context_matches
+from services.translation.core.terms.glossary import glossary_hard_entries
+from services.translation.core.terms.glossary import normalize_glossary_entries
+from services.translation.core.terms.glossary import term_pattern
 
 
 LEGACY_FORMULA_PLACEHOLDER_RE = re.compile(r"\[\[FORMULA_(\d+)]]")

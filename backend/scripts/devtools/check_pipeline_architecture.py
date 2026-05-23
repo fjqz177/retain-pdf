@@ -78,14 +78,6 @@ TRANSLATION_LAYER_IMPORT_RULES: dict[str, tuple[str, ...]] = {
     ),
     "core": (
         "services.translation.core",
-        # Payload/orchestration still contain legacy decision helpers while the
-        # physical layout is being consolidated.
-        "services.translation.services.classification",
-        "services.translation.services.continuation",
-        "services.translation.services.context",
-        "services.translation.services.policy",
-        "services.translation.services.terms",
-        "services.translation.workflow.pages",
     ),
     "workflow": (
         "services.translation.workflow",
@@ -145,13 +137,8 @@ TRANSLATION_LAYER_IMPORT_RULES: dict[str, tuple[str, ...]] = {
     ),
     "payload": (
         "services.translation.core.payload",
-        # Payload still applies historical policy/classification mutations while T23 is pending.
-        "services.translation.services.classification",
         "services.translation.core",
-        "services.translation.services.continuation",
         "services.translation.core.ocr",
-        "services.translation.services.policy",
-        "services.translation.services.terms",
     ),
     "memory": (
         "services.translation.services.memory",
