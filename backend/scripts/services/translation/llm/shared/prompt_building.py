@@ -4,8 +4,8 @@ import json
 
 from foundation.shared.prompt_loader import load_prompt
 from foundation.shared.prompt_loader import render_prompt
-from services.translation.services.context import TranslationItemContext
-from services.translation.services.context import build_item_context
+from services.translation.core.context import TranslationItemContext
+from services.translation.core.context import build_item_context
 from services.translation.llm.shared.prompt_protocols import batch_json_user_prompt
 from services.translation.llm.shared.prompt_protocols import build_translation_system_prompt as _build_translation_system_prompt
 from services.translation.llm.shared.prompt_protocols import direct_math_guidance as _direct_math_guidance

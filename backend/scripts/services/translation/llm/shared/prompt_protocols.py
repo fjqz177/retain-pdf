@@ -6,7 +6,7 @@ from typing import Any
 
 from foundation.shared.prompt_loader import load_prompt
 from foundation.shared.prompt_loader import render_prompt
-from services.translation.services.context import TranslationItemContext
+from services.translation.core.context import TranslationItemContext
 
 
 JSON_ONLY_INSTRUCTION = 'Return only valid JSON with the schema {"translations":[{"item_id":"...","translated_text":"..."}]}.'

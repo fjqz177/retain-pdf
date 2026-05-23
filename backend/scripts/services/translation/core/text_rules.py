@@ -54,10 +54,33 @@ TITLE_STYLE_HINT = (
     "Title rule: translate titles as concise formal headings. Preserve numbering, "
     "formula placeholders, symbols, and proper nouns; do not expand into body prose."
 )
+STYLE_HINTS_BY_ROLE = {
+    "abstract": "This block is an abstract sentence or paragraph. Translate it as compact academic summary prose.",
+    "heading": "This block is a section heading. Translate it as a short academic heading, not as a full sentence.",
+    "title": TITLE_STYLE_HINT,
+    "figure_caption": "This block is a figure-style caption or note. Keep caption style concise; preserve numbering, labels, and visual references.",
+    "image_caption": "This block is a figure caption. Keep caption style concise; preserve figure numbering/letters and visual references.",
+    "table_caption": "This block is a table caption. Keep caption style concise; preserve table numbering and parameter symbols.",
+    "code_caption": "This block is a code/listing caption. Keep listing identifiers and code names unchanged where appropriate.",
+    "caption": "This block is a caption. Keep it concise and caption-like rather than paragraph-like.",
+    "table_footnote": "This block is a table footnote. Keep it brief and note-like; preserve symbols, superscripts, and markers.",
+    "image_footnote": "This block is an image footnote. Keep it brief and note-like; preserve symbols, superscripts, and markers.",
+    "footnote": "This block is a footnote. Keep it brief and note-like rather than expanding it into body prose.",
+}
 
 
 def natural_word_count(text: str) -> int:
     return len([word for word in EN_WORD_RE.findall(text or "") if len(word) >= 3])
+
+
+def structure_style_hint(payload: dict | None) -> str:
+    source = payload or {}
+    explicit_hint = str(source.get("translation_style_hint", "") or "").strip()
+    explicit = str(source.get("structure_role", "") or "").strip().lower()
+    role_hint = STYLE_HINTS_BY_ROLE.get(explicit, "")
+    if explicit_hint and role_hint:
+        return f"{role_hint}\n{explicit_hint}"
+    return explicit_hint or role_hint
 
 
 def looks_like_url_fragment(text: str) -> bool:
@@ -202,6 +225,7 @@ def looks_like_reference_entry_text(text: str) -> bool:
 
 __all__ = [
     "TITLE_STYLE_HINT",
+    "STYLE_HINTS_BY_ROLE",
     "looks_like_code_literal_text_value",
     "looks_like_hard_nontranslatable_metadata",
     "looks_like_hard_nontranslatable_text",
@@ -210,4 +234,5 @@ __all__ = [
     "looks_like_short_copyright_tail",
     "looks_like_url_fragment",
     "natural_word_count",
+    "structure_style_hint",
 ]

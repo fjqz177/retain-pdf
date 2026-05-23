@@ -6,10 +6,10 @@ from dataclasses import replace
 from collections.abc import Iterable
 
 from services.translation.artifacts import classify_provider_family
-from services.translation.services.terms import AbbreviationEntry
-from services.translation.services.terms import GlossaryEntry
-from services.translation.services.terms import build_terms_guidance
-from services.translation.services.terms import matched_glossary_entries
+from services.translation.core.terms import AbbreviationEntry
+from services.translation.core.terms import GlossaryEntry
+from services.translation.core.terms import build_terms_guidance
+from services.translation.core.terms import matched_glossary_entries
 
 
 @dataclass(frozen=True)

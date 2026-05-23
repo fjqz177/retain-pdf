@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from services.translation.services.context.models import sanitize_prompt_context_text
+from services.translation.core.context.models import sanitize_prompt_context_text
 from services.translation.core.item_reader import item_is_textual
 
 
